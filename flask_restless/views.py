@@ -174,6 +174,35 @@ class API(ModelView):
 
     """
 
+    def __init__(self, model, authentication_required_for=None,
+                 authentication_function=None, *args, **kw):
+        """Instantiates this view with the specified attributes.
+
+        `model` is the :class:`flask_restless.Entity` class of the database
+        model for which this instance of the class is an API.
+
+        `authentication_required_for` is a list of HTTP method names (for
+        example, ``['POST', 'PATCH']``) for which authentication must be
+        required before clients can successfully make requests. If this keyword
+        argument is specified, `authentication_function` must also be
+        specified.
+
+        `authentication_function` is a function which accepts no arguments and
+        returns ``True`` if and only if a client is authorized to make a
+        request on an endpoint.
+
+        Pre-condition (callers must satisfy): if `authentication_required_for`
+        is specified, so must `authentication_function`.
+
+        """
+        super(API, self).__init__(model, *args, **kw)
+        self.authentication_required_for = authentication_required_for or ()
+        self.authentication_function = authentication_function
+        # convert HTTP method names to uppercase
+        self.authentication_required_for = \
+            frozenset([m.upper() for m in self.authentication_required_for])
+
+
     def _add_to_relation(self, query, relationname, toadd=None):
         """Adds a new or existing related model to each model specified by
         `query`.
@@ -393,6 +422,18 @@ class API(ModelView):
         else:
             return jsonify(result.to_dict(deep))
 
+
+    def _check_authentication(self):
+        """If the specified HTTP method requires authentication (see the
+        constructor), this function aborts with :http:statuscode:`401` unless a
+        current user is authorized with respect to the authentication function
+        specified in the constructor of this class.
+
+        """
+        if (request.method in self.authentication_required_for
+            and not self.authentication_function()):
+            abort(401)
+
     def get(self, instid):
         """Returns a JSON representation of an instance of model with the
         specified name.
@@ -409,6 +450,7 @@ class API(ModelView):
         :http:status:`404`.
 
         """
+        self._check_authentication()
         if instid is None:
             return self._search()
         inst = self.model.get_by(id=instid)
@@ -427,6 +469,7 @@ class API(ModelView):
         whether an object was deleted.
 
         """
+        self._check_authentication()
         inst = self.model.get_by(id=instid)
         if inst is not None:
             inst.delete()
@@ -453,6 +496,7 @@ class API(ModelView):
         single level of relationship data.
 
         """
+        self._check_authentication()
         # try to read the parameters for the model from the body of the request
         try:
             params = request.json
@@ -499,10 +543,10 @@ class API(ModelView):
         be made in this case.
 
         """
+        self._check_authentication()
         # If there is no data to update, just return HTTP 204 No Content.
         if len(request.data) == 0:
             return make_response(None, 204)
-
         # try to load the fields/values to update from the body of the request
         try:
             data = request.json
