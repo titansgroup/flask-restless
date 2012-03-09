@@ -1,0 +1,9 @@
+For test writers
+================
+
+If you are going to write new test classes, your class should most likely
+inherit from one of the base classes in `helpers.py`. If you are going to write
+new test methods, use the `self.app.getj`, `self.app.postj`, etc. methods
+instead of the `self.app.get`, `self.app.post`, etc. methods; the former will
+force the mimetype of the request to JSON, which is required for requests to
+API endpoints created by Flask-Restless.

@@ -30,11 +30,10 @@
 
 """
 
-import json
-
 from dateutil.parser import parse as parse_datetime
 from elixir import session
 from flask import abort
+from flask import json
 from flask import jsonify
 from flask import make_response
 from flask import request
@@ -43,6 +42,7 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm.exc import MultipleResultsFound
 from sqlalchemy.orm.exc import NoResultFound
 from sqlalchemy.sql import func
+from werkzeug.exceptions import BadRequest
 
 from .search import create_query
 from .search import search
@@ -147,14 +147,18 @@ class FunctionAPI(ModelView):
         :ref:`functionevaluation`.
 
         """
+        # if there is no data, return the empty JSON object
         if not request.data:
             return jsonify()
+        # if parsing JSON fails, return a 400 error in JSON format
         try:
-            data = json.loads(request.data)
-        except (TypeError, ValueError, OverflowError):
+            data = request.json
+        except BadRequest:
             return jsonify_status_code(400, message='Unable to decode data')
+        # if there is no 'functions' mapping, return the empty JSON object
         if 'functions' not in data:
             return jsonify()
+        # try to evaluate the functions
         try:
             result = _evaluate_functions(self.model, data['functions'])
             return jsonify(result)
@@ -451,10 +455,9 @@ class API(ModelView):
         """
         # try to read the parameters for the model from the body of the request
         try:
-            params = json.loads(request.data)
-        except (TypeError, ValueError, OverflowError):
+            params = request.json
+        except BadRequest:
             return jsonify_status_code(400, message='Unable to decode data')
-
         # Getting the list of relations that will be added later
         cols = self.model.get_columns()
         relations = self.model.get_relations()
@@ -496,15 +499,15 @@ class API(ModelView):
         be made in this case.
 
         """
+        # If there is no data to update, just return HTTP 204 No Content.
+        if len(request.data) == 0:
+            return make_response(None, 204)
+
         # try to load the fields/values to update from the body of the request
         try:
-            data = json.loads(request.data)
-        except (TypeError, ValueError, OverflowError):
+            data = request.json
+        except BadRequest:
             return jsonify_status_code(400, message='Unable to decode data')
-
-        # If there is no data to update, just return HTTP 204 No Content.
-        if len(data) == 0:
-            return make_response(None, 204)
 
         patchmany = instid is None
         if patchmany:

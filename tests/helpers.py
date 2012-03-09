@@ -14,7 +14,16 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-"""Helper functions for unit tests in this package."""
+"""Helper functions for unit tests in this package.
+
+New test classes should probably inherit from one of the existing ones
+here. These classes add ``getj``, ``postj``, etc. methods to the test client
+(available at ``self.app``) which for the content type of the requests to
+:mimetype:`application/json`. When writing new tests, use these so that you
+don't have to add ``content_type='application/json'`` every time you make a
+request.
+
+"""
 import os
 import tempfile
 import unittest
@@ -30,6 +39,35 @@ from sqlalchemy import create_engine
 from flask.ext.restless import APIManager
 
 from .models import Person
+
+
+def add_json_methods(client):
+    """Adds ``getj``, ``postj``, ``patchj``, ``putj``, and ``deletej`` methods
+    to the specified test client which act the same as their non-``j``
+    counterparts, except the content type of the request is forced to
+    :mimetype:`application/json`.
+
+    """
+    def getj(*args, **kw):
+        kw['content_type'] = 'application/json'
+        return client.get(*args, **kw)
+    def putj(*args, **kw):
+        kw['content_type'] = 'application/json'
+        return client.put(*args, **kw)
+    def patchj(*args, **kw):
+        kw['content_type'] = 'application/json'
+        return client.patch(*args, **kw)
+    def deletej(*args, **kw):
+        kw['content_type'] = 'application/json'
+        return client.delete(*args, **kw)
+    def postj(*args, **kw):
+        kw['content_type'] = 'application/json'
+        return client.post(*args, **kw)
+    client.getj = getj
+    client.putj = putj
+    client.postj = postj
+    client.patchj = patchj
+    client.deletej = deletej
 
 
 class TestSupport(unittest.TestCase):
@@ -78,6 +116,7 @@ class TestSupportWithManager(TestSupport):
         app.config['DEBUG'] = True
         app.config['TESTING'] = True
         self.app = app.test_client()
+        add_json_methods(self.app)
 
         # setup the URLs for the Person API
         self.manager = APIManager(app)
@@ -106,7 +145,7 @@ class TestSupportWithManagerPrefilled(TestSupport):
         app.config['DEBUG'] = True
         app.config['TESTING'] = True
         self.app = app.test_client()
-
+        add_json_methods(self.app)
         # setup the URLs for the Person API
         self.manager = APIManager(app)
 

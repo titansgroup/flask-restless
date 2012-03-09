@@ -45,39 +45,39 @@ class APIManagerTest(TestSupportWithManager):
                                 url_prefix='/readonly')
 
         # test that specified endpoints exist
-        response = self.app.post('/api/person', data=dumps(dict(name='foo')))
+        response = self.app.postj('/api/person', data=dumps(dict(name='foo')))
         self.assertEqual(response.status_code, 201)
         self.assertEqual(loads(response.data)['id'], 1)
-        response = self.app.get('/api/person')
+        response = self.app.getj('/api/person')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(loads(response.data)['objects']), 1)
         self.assertEqual(loads(response.data)['objects'][0]['id'], 1)
 
         # test that non-specified methods are not allowed
-        response = self.app.delete('/api/person/1')
+        response = self.app.deletej('/api/person/1')
         self.assertEqual(response.status_code, 405)
-        response = self.app.patch('/api/person/1',
+        response = self.app.patchj('/api/person/1',
                                   data=dumps(dict(name='bar')))
         self.assertEqual(response.status_code, 405)
 
         # test that specified endpoints exist
-        response = self.app.patch('/api2/person/1',
+        response = self.app.patchj('/api2/person/1',
                                   data=dumps(dict(name='bar')))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(loads(response.data)['id'], 1)
         self.assertEqual(loads(response.data)['name'], 'bar')
 
         # test that non-specified methods are not allowed
-        response = self.app.get('/api2/person/1')
+        response = self.app.getj('/api2/person/1')
         self.assertEqual(response.status_code, 405)
-        response = self.app.delete('/api2/person/1')
+        response = self.app.deletej('/api2/person/1')
         self.assertEqual(response.status_code, 405)
-        response = self.app.post('/api2/person',
+        response = self.app.postj('/api2/person',
                                  data=dumps(dict(name='baz')))
         self.assertEqual(response.status_code, 405)
 
         # test that the model is the same as before
-        response = self.app.get('/readonly/person')
+        response = self.app.getj('/readonly/person')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(loads(response.data)['objects']), 1)
         self.assertEqual(loads(response.data)['objects'][0]['id'], 1)
@@ -91,16 +91,16 @@ class APIManagerTest(TestSupportWithManager):
         self.manager.create_api(Person, methods=['POST', 'GET'],
                                 collection_name='people')
 
-        response = self.app.post('/api/people', data=dumps(dict(name='foo')))
+        response = self.app.postj('/api/people', data=dumps(dict(name='foo')))
         self.assertEqual(response.status_code, 201)
         self.assertEqual(loads(response.data)['id'], 1)
 
-        response = self.app.get('/api/people')
+        response = self.app.getj('/api/people')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(loads(response.data)['objects']), 1)
         self.assertEqual(loads(response.data)['objects'][0]['id'], 1)
 
-        response = self.app.get('/api/people/1')
+        response = self.app.getj('/api/people/1')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(loads(response.data)['id'], 1)
 
@@ -110,7 +110,7 @@ class APIManagerTest(TestSupportWithManager):
 
         """
         self.manager.create_api(Person, allow_functions=True)
-        response = self.app.get('/api/eval/person')
+        response = self.app.getj('/api/eval/person')
         self.assertNotEqual(response.status_code, 400)
         self.assertEqual(response.status_code, 200)
 
@@ -120,6 +120,6 @@ class APIManagerTest(TestSupportWithManager):
 
         """
         self.manager.create_api(Person, allow_functions=False)
-        response = self.app.get('/api/eval/person')
+        response = self.app.getj('/api/eval/person')
         self.assertNotEqual(response.status_code, 200)
         self.assertEqual(response.status_code, 404)

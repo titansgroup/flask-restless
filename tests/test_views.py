@@ -94,8 +94,8 @@ class FunctionAPITestCase(TestSupportWithManagerPrefilled):
         """
         functions = [{'name': 'sum', 'field': 'age'},
                      {'name': 'avg', 'field': 'other'}]
-        response = self.app.get('/api/eval/person',
-                                data=dumps(dict(functions=functions)))
+        response = self.app.getj('/api/eval/person',
+                                 data=dumps(dict(functions=functions)))
         self.assertEqual(response.status_code, 200)
         data = loads(response.data)
         self.assertIn('sum__age', data)
@@ -110,14 +110,14 @@ class FunctionAPITestCase(TestSupportWithManagerPrefilled):
         """
         # test for bad field name
         search = {'functions': [{'name': 'sum', 'field': 'bogusfieldname'}]}
-        resp = self.app.get('/api/eval/person', data=dumps(search))
+        resp = self.app.getj('/api/eval/person', data=dumps(search))
         self.assertEqual(resp.status_code, 400)
         self.assertIn('message', loads(resp.data))
         self.assertIn('bogusfieldname', loads(resp.data)['message'])
 
         # test for bad function name
         search = {'functions': [{'name': 'bogusfuncname', 'field': 'age'}]}
-        resp = self.app.get('/api/eval/person', data=dumps(search))
+        resp = self.app.getj('/api/eval/person', data=dumps(search))
         self.assertEqual(resp.status_code, 400)
         self.assertIn('message', loads(resp.data))
         self.assertIn('bogusfuncname', loads(resp.data)['message'])
@@ -142,7 +142,7 @@ class APITestCase(TestSupportWithManager):
         self.manager.create_api(Computer, methods=['GET', 'POST'])
 
         # to facilitate searching
-        self.app.search = lambda url, q: self.app.get(url + '?q={}'.format(q))
+        self.app.search = lambda url, q: self.app.getj(url + '?q={}'.format(q))
 
     def test_post(self):
         """Test for creating a new instance of the database model using the
@@ -150,7 +150,7 @@ class APITestCase(TestSupportWithManager):
 
         """
         # Invalid JSON in request data should respond with error.
-        response = self.app.post('/api/person', data='Invalid JSON string')
+        response = self.app.postj('/api/person', data='Invalid JSON string')
         self.assertEqual(response.status_code, 400)
         self.assertEqual(loads(response.data)['message'],
                          'Unable to decode data')
@@ -161,12 +161,12 @@ class APITestCase(TestSupportWithManager):
         # assert loads(response.data)['message'] == 'Validation error'
         # assert loads(response.data)['error_list'].keys() == ['age']
 
-        response = self.app.post('/api/person',
-                                 data=dumps({'name': 'Lincoln', 'age': 23}))
+        response = self.app.postj('/api/person',
+                                  data=dumps({'name': 'Lincoln', 'age': 23}))
         self.assertEqual(response.status_code, 201)
         self.assertIn('id', loads(response.data))
 
-        response = self.app.get('/api/person/1')
+        response = self.app.getj('/api/person/1')
         self.assertEqual(response.status_code, 200)
 
         deep = {'computers': []}
@@ -177,11 +177,11 @@ class APITestCase(TestSupportWithManager):
         """Tests the creation of a model with a related field."""
         data = {'name': u'John', 'age': 2041,
                 'computers': [{'name': u'lixeiro', 'vendor': u'Lemote'}]}
-        response = self.app.post('/api/person', data=dumps(data))
+        response = self.app.postj('/api/person', data=dumps(data))
         self.assertEqual(response.status_code, 201)
         self.assertIn('id', loads(response.data))
 
-        response = self.app.get('/api/person')
+        response = self.app.getj('/api/person')
         self.assertEqual(len(loads(response.data)), 1)
 
     def test_delete(self):
@@ -190,15 +190,15 @@ class APITestCase(TestSupportWithManager):
 
         """
         # Creating the person who's gonna be deleted
-        response = self.app.post('/api/person',
-                                 data=dumps({'name': 'Lincoln', 'age': 23}))
+        response = self.app.postj('/api/person',
+                                  data=dumps({'name': 'Lincoln', 'age': 23}))
         self.assertEqual(response.status_code, 201)
         self.assertIn('id', loads(response.data))
 
         # Making sure it has been created
         deep = {'computers': []}
         inst = Person.get_by(id=1).to_dict(deep)
-        response = self.app.get('/api/person/1')
+        response = self.app.getj('/api/person/1')
         self.assertEqual(loads(response.data), inst)
 
         # Deleting it
@@ -224,7 +224,7 @@ class APITestCase(TestSupportWithManager):
         :http:statuscode:`405`.
 
         """
-        response = self.app.patch('/api/person', data=dumps(dict(name='foo')))
+        response = self.app.patchj('/api/person', data=dumps(dict(name='foo')))
         self.assertEqual(response.status_code, 405)
 
     def test_put_same_as_patch(self):
@@ -237,18 +237,18 @@ class APITestCase(TestSupportWithManager):
                                 allow_patch_many=True, url_prefix='/api/v2')
 
         # Creating some people
-        self.app.post('/api/v2/person',
-                      data=dumps({'name': 'Lincoln', 'age': 23}))
-        self.app.post('/api/v2/person',
-                      data=dumps({'name': 'Lucy', 'age': 23}))
-        self.app.post('/api/v2/person',
-                      data=dumps({'name': 'Mary', 'age': 25}))
+        self.app.postj('/api/v2/person',
+                       data=dumps({'name': 'Lincoln', 'age': 23}))
+        self.app.postj('/api/v2/person',
+                       data=dumps({'name': 'Lucy', 'age': 23}))
+        self.app.postj('/api/v2/person',
+                       data=dumps({'name': 'Mary', 'age': 25}))
 
         # change a single entry
-        resp = self.app.put('/api/v2/person/1', data=dumps({'age': 24}))
+        resp = self.app.putj('/api/v2/person/1', data=dumps({'age': 24}))
         self.assertEqual(resp.status_code, 200)
 
-        resp = self.app.get('/api/v2/person/1')
+        resp = self.app.getj('/api/v2/person/1')
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(loads(resp.data)['age'], 24)
 
@@ -256,10 +256,10 @@ class APITestCase(TestSupportWithManager):
         day, month, year = 15, 9, 1986
         birth_date = date(year, month, day).strftime('%d/%m/%Y')  # iso8601
         form = {'birth_date': birth_date}
-        self.app.put('/api/v2/person', data=dumps(form))
+        self.app.putj('/api/v2/person', data=dumps(form))
 
         # Finally, testing if the change was made
-        response = self.app.get('/api/v2/person')
+        response = self.app.getj('/api/v2/person')
         loaded = loads(response.data)['objects']
         for i in loaded:
             self.assertEqual(i['birth_date'], ('%s-%s-%s' % (
@@ -275,12 +275,12 @@ class APITestCase(TestSupportWithManager):
                                 allow_patch_many=True, url_prefix='/api/v2')
 
         # Creating some people
-        self.app.post('/api/v2/person',
-                      data=dumps({'name': 'Lincoln', 'age': 23}))
-        self.app.post('/api/v2/person',
-                      data=dumps({'name': 'Lucy', 'age': 23}))
-        self.app.post('/api/v2/person',
-                      data=dumps({'name': 'Mary', 'age': 25}))
+        self.app.postj('/api/v2/person',
+                       data=dumps({'name': 'Lincoln', 'age': 23}))
+        self.app.postj('/api/v2/person',
+                       data=dumps({'name': 'Lucy', 'age': 23}))
+        self.app.postj('/api/v2/person',
+                       data=dumps({'name': 'Mary', 'age': 25}))
 
         # Trying to pass invalid data to the update method
         # resp = self.app.patch('/api/person', data='Hello there')
@@ -304,10 +304,10 @@ class APITestCase(TestSupportWithManager):
         day, month, year = 15, 9, 1986
         birth_date = date(year, month, day).strftime('%d/%m/%Y')  # iso8601
         form = {'birth_date': birth_date}
-        self.app.patch('/api/v2/person', data=dumps(form))
+        self.app.patchj('/api/v2/person', data=dumps(form))
 
         # Finally, testing if the change was made
-        response = self.app.get('/api/v2/person')
+        response = self.app.getj('/api/v2/person')
         loaded = loads(response.data)['objects']
         for i in loaded:
             self.assertEqual(i['birth_date'], ('%s-%s-%s' % (
@@ -318,13 +318,13 @@ class APITestCase(TestSupportWithManager):
         :http:method:`patch` method.
 
         """
-        resp = self.app.post('/api/person', data=dumps({'name': 'Lincoln',
+        resp = self.app.postj('/api/person', data=dumps({'name': 'Lincoln',
                                                          'age': 10}))
         self.assertEqual(resp.status_code, 201)
         self.assertIn('id', loads(resp.data))
 
         # Trying to pass invalid data to the update method
-        resp = self.app.patch('/api/person/1', data='Invalid JSON string')
+        resp = self.app.patchj('/api/person/1', data='Invalid JSON string')
         self.assertEqual(resp.status_code, 400)
         self.assertEqual(loads(resp.data)['message'], 'Unable to decode data')
 
@@ -336,10 +336,10 @@ class APITestCase(TestSupportWithManager):
         # assert loaded['message'] == 'Validation error'
         # assert loaded['error_list'] == [{'age': 'Please enter a number'}]
 
-        resp = self.app.patch('/api/person/1', data=dumps({'age': 24}))
+        resp = self.app.patchj('/api/person/1', data=dumps({'age': 24}))
         self.assertEqual(resp.status_code, 200)
 
-        resp = self.app.get('/api/person/1')
+        resp = self.app.getj('/api/person/1')
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(loads(resp.data)['age'], 24)
 
@@ -349,18 +349,18 @@ class APITestCase(TestSupportWithManager):
 
         """
         # Let's create a row as usual
-        response = self.app.post('/api/person',
-                                 data=dumps({'name': u'Lincoln', 'age': 23}))
+        response = self.app.postj('/api/person',
+                                  data=dumps({'name': u'Lincoln', 'age': 23}))
         self.assertEqual(response.status_code, 201)
 
         data = {'computers':
                     {'add': [{'name': u'lixeiro', 'vendor': u'Lemote'}]}
                 }
-        response = self.app.patch('/api/person/1', data=dumps(data))
+        response = self.app.patchj('/api/person/1', data=dumps(data))
         self.assertEqual(response.status_code, 200)
 
         # Let's check it out
-        response = self.app.get('/api/person/1')
+        response = self.app.getj('/api/person/1')
         loaded = loads(response.data)
 
         self.assertEqual(len(loaded['computers']), 1)
@@ -389,7 +389,7 @@ class APITestCase(TestSupportWithManager):
                 {'name': u'pidinti', 'vendor': u'HP'},
             ],
         }
-        self.app.post('/api/person', data=dumps(data))
+        self.app.postj('/api/person', data=dumps(data))
 
         # Data for the update
         update_data = {
@@ -397,12 +397,12 @@ class APITestCase(TestSupportWithManager):
                 'remove': [{'name': u'pidinti'}],
             }
         }
-        resp = self.app.patch('/api/person/1', data=dumps(update_data))
+        resp = self.app.patchj('/api/person/1', data=dumps(update_data))
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(loads(resp.data)['id'], 1)
 
         # Let's check it out
-        response = self.app.get('/api/person/1')
+        response = self.app.getj('/api/person/1')
         loaded = loads(response.data)
         self.assertEqual(len(loaded['computers']), 1)
 
@@ -415,18 +415,18 @@ class APITestCase(TestSupportWithManager):
         """
         # Creating all rows needed in our test
         person_data = {'name': u'Lincoln', 'age': 23}
-        resp = self.app.post('/api/person', data=dumps(person_data))
+        resp = self.app.postj('/api/person', data=dumps(person_data))
         self.assertEqual(resp.status_code, 201)
         comp_data = {'name': u'lixeiro', 'vendor': u'Lemote'}
-        resp = self.app.post('/api/computer', data=dumps(comp_data))
+        resp = self.app.postj('/api/computer', data=dumps(comp_data))
         self.assertEqual(resp.status_code, 201)
 
         # updating person to add the computer
         update_data = {'computers': {'add': [{'id': 1}]}}
-        self.app.patch('/api/person/1', data=dumps(update_data))
+        self.app.patchj('/api/person/1', data=dumps(update_data))
 
         # Making sure that everything worked properly
-        resp = self.app.get('/api/person/1')
+        resp = self.app.getj('/api/person/1')
         self.assertEqual(resp.status_code, 200)
         loaded = loads(resp.data)
         self.assertEqual(len(loaded['computers']), 1)
@@ -440,17 +440,17 @@ class APITestCase(TestSupportWithManager):
                 ],
             },
         }
-        resp = self.app.patch('/api/person/1', data=dumps(update2_data))
+        resp = self.app.patchj('/api/person/1', data=dumps(update2_data))
         self.assertEqual(resp.status_code, 200)
 
         # Testing to make sure it was removed from the related field
-        resp = self.app.get('/api/person/1')
+        resp = self.app.getj('/api/person/1')
         self.assertEqual(resp.status_code, 200)
         loaded = loads(resp.data)
         self.assertEqual(len(loaded['computers']), 0)
 
         # Making sure it was removed from the database
-        resp = self.app.get('/api/computer/1')
+        resp = self.app.getj('/api/computer/1')
         self.assertEqual(resp.status_code, 404)
 
     def test_search(self):
@@ -462,7 +462,7 @@ class APITestCase(TestSupportWithManager):
         #assert resp.status_code == 400
         #assert loads(resp.data)['message'] == 'Unable to decode data'
 
-        create = lambda x: self.app.post('/api/person', data=dumps(x))
+        create = lambda x: self.app.postj('/api/person', data=dumps(x))
         create({'name': u'Lincoln', 'age': 23, 'other': 22})
         create({'name': u'Mary', 'age': 19, 'other': 19})
         create({'name': u'Lucy', 'age': 25, 'other': 20})
@@ -552,7 +552,7 @@ class APITestCase(TestSupportWithManager):
                 'add': [{'name': u'lixeiro', 'vendor': u'Lenovo'}]
             }
         }
-        resp = self.app.patch('/api/person/1', data=dumps(update))
+        resp = self.app.patchj('/api/person/1', data=dumps(update))
         self.assertEqual(resp.status_code, 200)
 
         # TODO document this
@@ -589,7 +589,7 @@ class APITestCase(TestSupportWithManager):
 
     def test_search2(self):
         """Testing more search functionality."""
-        create = lambda x: self.app.post('/api/person', data=dumps(x))
+        create = lambda x: self.app.postj('/api/person', data=dumps(x))
         create({'name': u'Fuxu', 'age': 32})
         create({'name': u'Everton', 'age': 33})
         create({'name': u'Lincoln', 'age': 24})
@@ -613,3 +613,20 @@ class APITestCase(TestSupportWithManager):
         resp = self.app.search('/api/person', dumps({'single': True}))
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(loads(resp.data)['message'], 'Multiple results found')
+
+    def test_mimetype_json(self):
+        """Tests that the mimetype of responses is
+        :mimetype:`application/json`.
+
+        """
+        # create a person
+        response = self.app.postj('/api/person',
+                                  data=dumps(dict(name='Jeffrey')))
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.mimetype, 'application/json')
+        personid = loads(response.data)['id']
+
+        # get a person
+        response = self.app.getj('/api/person/' + str(personid))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.mimetype, 'application/json')
