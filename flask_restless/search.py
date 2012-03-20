@@ -3,18 +3,20 @@
 # Copyright (C) 2011 Lincoln de Sousa <lincoln@comum.org>
 # Copyright 2012 Jeffrey Finkelstein <jeffrey.finkelstein@gmail.com>
 #
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
+# This file is part of Flask-Restless.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
+# Flask-Restless is free software: you can redistribute it and/or modify it
+# under the terms of the GNU Affero General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or (at your
+# option) any later version.
+#
+# Flask-Restless is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
 #
 # You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# along with Flask-Restless. If not, see <http://www.gnu.org/licenses/>.
 """Provides querying, searching, and function evaluation on Elixir models.
 
 :copyright:2011 by Lincoln de Sousa <lincoln@comum.org>
@@ -64,9 +66,18 @@ OPERATORS = {
     'is_not_null': lambda f, a, fn: f != None,
     'desc': lambda f, a, fn: f.desc,
     'asc': lambda f, a, fn: f.asc,
-    'has': lambda f, a, fn: f.has(**{fn: a}),
-    'any': lambda f, a, fn: f.any(**{fn: a})
+    # HACK For Python 2.5, unicode dictionary keys are not allowed.
+    'has': lambda f, a, fn: f.has(**{str(fn): a}),
+    'any': lambda f, a, fn: f.any(**{str(fn): a})
 }
+
+
+def _unicode_keys_to_strings(dictionary):
+    """Returns a new dictionary with the same mappings as `dictionary`, but
+    with each of the keys coerced to a string (by calling :func:`str(key)`).
+
+    """
+    return dict((str(k), v) for k, v in dictionary.iteritems())
 
 
 class IllegalArgumentError(Exception):
@@ -233,7 +244,10 @@ class SearchParameters(object):
         from_dict = Filter.from_dictionary
         # may raise IllegalArgumentError
         filters = [from_dict(f) for f in dictionary.get('filters', [])]
-        order_by = [OrderBy(**o) for o in dictionary.get('order_by', [])]
+        # HACK In Python 2.5, unicode dictionary keys are not allowed.
+        order_by_list = dictionary.get('order_by', [])
+        order_by_list = (_unicode_keys_to_strings(o) for o in order_by_list)
+        order_by = [OrderBy(**o) for o in order_by_list]
         limit = dictionary.get('limit')
         offset = dictionary.get('offset')
         return SearchParameters(filters=filters, limit=limit, offset=offset,
@@ -287,9 +301,8 @@ class QueryBuilder(object):
         field = getattr(model, relation or fieldname)
         return OPERATORS.get(operator)(field, argument, fieldname)
 
-    # TODO rename this to _create_filters
     @staticmethod
-    def _extract_operators(model, search_params):
+    def _create_filters(model, search_params):
         """Returns the list of operations on ``model`` specified in the
         :attr:`filters` attribute on the ``search_params`` object.
 
@@ -297,22 +310,21 @@ class QueryBuilder(object):
         class whose fields represent the parameters of the search.
 
         """
-        operations = []
-        for f in search_params.filters:
-            fname = f.fieldname
-            val = f.argument
+        filters = []
+        for filt in search_params.filters:
+            fname = filt.fieldname
+            val = filt.argument
             # get the relationship from the field name, if it exists
             relation = None
             if '__' in fname:
                 relation, fname = fname.split('__')
             # get the other field to which to compare, if it exists
-            if f.otherfield:
-                val = getattr(model, f.otherfield)
-            param = QueryBuilder._create_operation(model, fname, f.operator,
+            if filt.otherfield:
+                val = getattr(model, filt.otherfield)
+            param = QueryBuilder._create_operation(model, fname, filt.operator,
                                                    val, relation)
-            operations.append(param)
-
-        return operations
+            filters.append(param)
+        return filters
 
     @staticmethod
     def create_query(model, search_params):
@@ -337,9 +349,9 @@ class QueryBuilder(object):
         """
         # Adding field filters
         query = model.query
-        operations = QueryBuilder._extract_operators(model, search_params)
-        for i in operations:
-            query = query.filter(i)
+        filters = QueryBuilder._create_filters(model, search_params)
+        for filt in filters:
+            query = query.filter(filt)
 
         # Order the search
         for val in search_params.order_by:

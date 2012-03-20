@@ -3,19 +3,20 @@
 # Copyright (C) 2011 Lincoln de Sousa <lincoln@comum.org>
 # Copyright 2012 Jeffrey Finkelstein <jeffrey.finkelstein@gmail.com>
 #
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
+# This file is part of Flask-Restless.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
+# Flask-Restless is free software: you can redistribute it and/or modify it
+# under the terms of the GNU Affero General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or (at your
+# option) any later version.
+#
+# Flask-Restless is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
 #
 # You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
+# along with Flask-Restless. If not, see <http://www.gnu.org/licenses/>.
 """
     flaskext.restless.manager
     ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -62,7 +63,7 @@ class APIManager(object):
     #:
     #: This format string expects the name of a model to be provided when
     #: formatting.
-    APINAME_FORMAT = '{}api'
+    APINAME_FORMAT = '%sapi'
 
     #: The format of the name of the blueprint containing the API view for a
     #: given model.
@@ -72,7 +73,7 @@ class APIManager(object):
     #: 1. name of the API view of a specific model
     #: 2. a number representing the number of times a blueprint with that name
     #:    has been registered.
-    BLUEPRINTNAME_FORMAT = '{}{}'
+    BLUEPRINTNAME_FORMAT = '%s%s'
 
     def __init__(self, app=None):
         """Stores the specified :class:`flask.Flask` application object so that
@@ -112,7 +113,7 @@ class APIManager(object):
             b = basename
             existing_numbers = [int(n.partition(b)[-1]) for n in existing]
             next_number = max(existing_numbers) + 1
-        return APIManager.BLUEPRINTNAME_FORMAT.format(basename, next_number)
+        return APIManager.BLUEPRINTNAME_FORMAT % (basename, next_number)
 
     def init_app(self, app):
         """Stores the specified :class:`flask.Flask` application object on
@@ -212,27 +213,21 @@ class APIManager(object):
         request on an endpoint.
 
         .. versionadded:: 0.4
-
            Added the `authentication_required_for` keyword argument.
 
         .. versionadded:: 0.4
-
            Added the `authentication_function` keyword argument.
 
         .. versionadded:: 0.4
-
            Added the `allow_functions` keyword argument.
 
         .. versionchanged:: 0.4
-
            Force the model name in the URL to lowercase.
 
         .. versionadded:: 0.4
-
            Added the `allow_patch_many` keyword argument.
 
         .. versionadded:: 0.4
-
            Added the `collection_name` keyword argument.
 
         """
@@ -244,17 +239,19 @@ class APIManager(object):
             collection_name = model.__name__.lower()
         methods = frozenset(methods)
         # sets of methods used for different types of endpoints
-        no_instance_methods = methods & {'POST'}
+        no_instance_methods = methods & frozenset(('POST', ))
         if allow_patch_many:
-            possibly_empty_instance_methods = methods & {'GET', 'PATCH', 'PUT'}
+            possibly_empty_instance_methods = \
+                methods & frozenset(('GET', 'PATCH', 'PUT'))
         else:
-            possibly_empty_instance_methods = methods & {'GET'}
-        instance_methods = methods & {'GET', 'PATCH', 'DELETE', 'PUT'}
+            possibly_empty_instance_methods = methods & frozenset(('GET', ))
+        instance_methods = \
+            methods & frozenset(('GET', 'PATCH', 'DELETE', 'PUT'))
         # the base URL of the endpoints on which requests will be made
-        collection_endpoint = '/{}'.format(collection_name)
+        collection_endpoint = '/%s' % collection_name
         instance_endpoint = collection_endpoint + '/<int:instid>'
         # the name of the API, for use in creating the view and the blueprint
-        apiname = APIManager.APINAME_FORMAT.format(collection_name)
+        apiname = APIManager.APINAME_FORMAT % collection_name
         # the view function for the API for this model
         api_view = API.as_view(apiname, model, authentication_required_for,
                                authentication_function)

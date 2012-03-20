@@ -1,20 +1,26 @@
 # -*- coding: utf-8; Mode: Python -*-
 #
-# Copyright 2012 Jeffrey Finkelstein <jefrey.finkelstein@gmail.com>
+# Copyright 2012 Jeffrey Finkelstein <jeffrey.finkelstein@gmail.com>
 #
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
+# This file is part of Flask-Restless.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
+# Flask-Restless is free software: you can redistribute it and/or modify it
+# under the terms of the GNU Affero General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or (at your
+# option) any later version.
+#
+# Flask-Restless is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
 #
 # You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# along with Flask-Restless. If not, see <http://www.gnu.org/licenses/>.
 """Unit tests for the :mod:`flask_restless.search` module."""
+from __future__ import with_statement
+
+from unittest2 import TestSuite
+
 from elixir import session
 from sqlalchemy.orm.exc import MultipleResultsFound
 from sqlalchemy.orm.exc import NoResultFound
@@ -26,6 +32,9 @@ from flask.ext.restless.search import SearchParameters
 from .helpers import TestSupportPrefilled
 from .models import Computer
 from .models import Person
+
+
+__all__ = ['QueryCreationTest', 'SearchTest']
 
 
 class QueryCreationTest(TestSupportPrefilled):
@@ -118,7 +127,7 @@ class SearchTest(TestSupportPrefilled):
         d = {'single': True,
              'filters': [{'name': 'name', 'val': u'%y%', 'op': 'like'}]}
         with self.assertRaises(MultipleResultsFound):
-            result = search(Person, d)
+            search(Person, d)
 
         # tests getting no results
         d = {'single': True,
@@ -131,3 +140,11 @@ class SearchTest(TestSupportPrefilled):
              'filters': [{'name': 'name', 'val': u'Lincoln', 'op': '=='}]}
         result = search(Person, d)
         self.assertEqual(result.name, u'Lincoln')
+
+
+def load_tests(loader, standard_tests, pattern):
+    """Returns the test suite for this module."""
+    suite = TestSuite()
+    suite.addTest(loader.loadTestsFromTestCase(QueryCreationTest))
+    suite.addTest(loader.loadTestsFromTestCase(SearchTest))
+    return suite

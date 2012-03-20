@@ -1,29 +1,35 @@
 # -*- coding: utf-8; Mode: Python -*-
 #
-# Copyright 2012 Jeffrey Finkelstein <jefrey.finkelstein@gmail.com>
+# Copyright 2012 Jeffrey Finkelstein <jeffrey.finkelstein@gmail.com>
 #
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
+# This file is part of Flask-Restless.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
+# Flask-Restless is free software: you can redistribute it and/or modify it
+# under the terms of the GNU Affero General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or (at your
+# option) any later version.
+#
+# Flask-Restless is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
 #
 # You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# along with Flask-Restless. If not, see <http://www.gnu.org/licenses/>.
 """Unit tests for the :mod:`flask_restless.manager` module."""
-from json import dumps
-from json import loads
+from unittest2 import TestSuite
 
-from flask import Flask
-
-from flask.ext.restless.manager import APIManager
+from flask import json
 
 from .helpers import TestSupportWithManager
 from .models import Person
+
+
+__all__ = ['APIManagerTest']
+
+
+dumps = json.dumps
+loads = json.loads
 
 
 class APIManagerTest(TestSupportWithManager):
@@ -38,7 +44,6 @@ class APIManagerTest(TestSupportWithManager):
 
         """
         # create three different APIs for the same model
-        # TODO note in documentation that only
         self.manager.create_api(Person, methods=['GET', 'POST'])
         self.manager.create_api(Person, methods=['PATCH'], url_prefix='/api2')
         self.manager.create_api(Person, methods=['GET'],
@@ -123,3 +128,10 @@ class APIManagerTest(TestSupportWithManager):
         response = self.app.getj('/api/eval/person')
         self.assertNotEqual(response.status_code, 200)
         self.assertEqual(response.status_code, 404)
+
+
+def load_tests(loader, standard_tests, pattern):
+    """Returns the test suite for this module."""
+    suite = TestSuite()
+    suite.addTest(loader.loadTestsFromTestCase(APIManagerTest))
+    return suite

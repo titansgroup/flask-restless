@@ -3,8 +3,8 @@
 ## Introduction ##
 
 This is Flask-Restless, a [Flask][1] extension which facilitates the creation
-of ReSTful APIs. It is compatible with models which have been described using
-[Elixir][2], a layer on top of [SQLAlchemy][3].
+of ReSTful JSON APIs. It is compatible with models which have been described
+using [Elixir][2], a layer on top of [SQLAlchemy][3].
 
 This document contains some brief instructions concerning installation of
 requirements, installation of this extension, configuration and usage of this
@@ -12,7 +12,7 @@ extension, and building of documentation.
 
 For more information, check the World Wide Web!
 
-  * [Homepage and documentation](http://packages.python.org/Flask-Restless)
+  * [Documentation](http://readthedocs.org/docs/flask-restless)
   * [Python Package Index listing](http://pypi.python.org/pypi/Flask-Restless)
   * [Source code repository](http://github.com/jfinkels/flask-restless)
 
@@ -31,16 +31,17 @@ information see the `COPYING` file.
 
 This is a partial listing of the contents of this package.
 
-* `doc/` - the Sphinx documentation for Flask-Restless
-* `examples/` - example applications of Flask-Restless
 * `COPYING` - the copyright license under which this program is distributed to
   you (the GNU Affero General Public License version 3)
-* `flaskext/restless` - the Python package containing the extension
+* `docs/` - the Sphinx documentation for Flask-Restless
+* `examples/` - example applications of Flask-Restless
+* `flask_restless/` - the Python package containing the extension
 * `README.md` - this file
 * `setup.py` - Python setuptools configuration file for packaging this
   extension
+* `tests/` - unit tests for Flask-Restless
 
-The `flaskext/restless` directory is a Python package containing the following
+The `flask_restless` directory is a Python package containing the following
 files:
 
 * `views.py` - the view class which implements the ReSTful API
@@ -53,7 +54,7 @@ files:
 
 ## Installing ##
 
-This application requires [Python 2.7][4].
+This application requires [Python][4] version 2.5, 2.6, or 2.7.
 
 This application requires the following libraries to be installed:
 
@@ -84,15 +85,20 @@ This package can be built, installed, etc. as a Python egg using the provided
 ## How to use ##
 
 For information on how to use this extension, build the documentation here or
-view the version at the project's
-[homepage](http://packages.python.org/Flask-Restless).
+[view it on the Web](http://readthedocs.org/docs/flask-restless).
 
 ## Testing ##
+
+Running the unit tests require the [unittest2][ut2] package, which backports
+the functionality of the built-in `unittest` package from Python version 2.7 to
+earlier versions.
 
 The Python unit tests are contained in the `tests/` directory (which is a
 Python package). To run the test suite, run the command
 
     python setup.py test
+
+[ut2]: http://pypi.python.org/pypi/unittest2
 
 ## Building documentation ##
 

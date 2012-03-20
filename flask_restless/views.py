@@ -3,19 +3,20 @@
 # Copyright (C) 2011 Lincoln de Sousa <lincoln@comum.org>
 # Copyright 2012 Jeffrey Finkelstein <jeffrey.finkelstein@gmail.com>
 #
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
+# This file is part of Flask-Restless.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
+# Flask-Restless is free software: you can redistribute it and/or modify it
+# under the terms of the GNU Affero General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or (at your
+# option) any later version.
+#
+# Flask-Restless is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
 #
 # You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
+# along with Flask-Restless. If not, see <http://www.gnu.org/licenses/>.
 """
     flaskext.restless.views
     ~~~~~~~~~~~~~~~~~~~~~~~
@@ -86,30 +87,47 @@ def _evaluate_functions(model, functions):
 
     If a field does not exist on a given model, :exc:`AttributeError` is
     raised. If a function does not exist,
-    :exc:`sqlalchemy.exc.OperationalError` is raised.
+    :exc:`sqlalchemy.exc.OperationalError` is raised. The former exception will
+    have a ``field`` attribute which is the name of the field which does not
+    exist. The latter exception will have a ``function`` attribute which is the
+    name of the function with does not exist.
 
     """
     if not model or not functions:
         return {}
     processed = []
     funcnames = []
-    for f in functions:
+    for function in functions:
+        funcname, fieldname = function['name'], function['field']
         # We retrieve the function by name from the SQLAlchemy ``func``
         # module and the field by name from the model class.
         #
-        # If the specified function doesn't exist, this raises
-        # OperationalError. If the specified field doesn't exist, this raises
-        # AttributeError.
-        funcobj = getattr(func, f['name'])
-        field = getattr(model, f['field'])
+        # If the specified field doesn't exist, this raises AttributeError.
+        funcobj = getattr(func, funcname)
+        try:
+            field = getattr(model, fieldname)
+        except AttributeError, exception:
+            exception.field = fieldname
+            raise exception
         # Time to store things to be executed. The processed list stores
         # functions that will be executed in the database and funcnames
         # contains names of the entries that will be returned to the
         # caller.
-        funcnames.append('{}__{}'.format(f['name'], f['field']))
+        funcnames.append('%s__%s' % (funcname, fieldname))
         processed.append(funcobj(field))
-    # evaluate all the functions at once and get an iterable of results
-    evaluated = session.query(*processed).one()
+    # Evaluate all the functions at once and get an iterable of results.
+    #
+    # If any of the functions
+    try:
+        evaluated = session.query(*processed).one()
+    except OperationalError, exception:
+        # HACK original error message is of the form:
+        #
+        #    '(OperationalError) no such function: bogusfuncname'
+        original_error_msg = exception.args[0]
+        bad_function = original_error_msg[37:]
+        exception.function = bad_function
+        raise exception
     return dict(zip(funcnames, evaluated))
 
 
@@ -162,8 +180,12 @@ class FunctionAPI(ModelView):
         try:
             result = _evaluate_functions(self.model, data['functions'])
             return jsonify(result)
-        except (AttributeError, OperationalError) as exception:
-            return jsonify_status_code(400, message=exception.message)
+        except AttributeError, exception:
+            message = 'No such field "%s"' % exception.field
+            return jsonify_status_code(400, message=message)
+        except OperationalError, exception:
+            message = 'No such function "%s"' % exception.function
+            return jsonify_status_code(400, message=message)
 
 
 class API(ModelView):
@@ -201,7 +223,6 @@ class API(ModelView):
         # convert HTTP method names to uppercase
         self.authentication_required_for = \
             frozenset([m.upper() for m in self.authentication_required_for])
-
 
     def _add_to_relation(self, query, relationname, toadd=None):
         """Adds a new or existing related model to each model specified by
@@ -421,7 +442,6 @@ class API(ModelView):
             return jsonify(objects=result)
         else:
             return jsonify(result.to_dict(deep))
-
 
     def _check_authentication(self):
         """If the specified HTTP method requires authentication (see the

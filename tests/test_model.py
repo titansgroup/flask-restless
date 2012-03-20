@@ -2,20 +2,23 @@
 #
 # Copyright (C) 2011 Lincoln de Sousa <lincoln@comum.org>
 #
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
+# This file is part of Flask-Restless.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
+# Flask-Restless is free software: you can redistribute it and/or modify it
+# under the terms of the GNU Affero General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or (at your
+# option) any later version.
+#
+# Flask-Restless is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
 #
 # You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# along with Flask-Restless. If not, see <http://www.gnu.org/licenses/>.
 """Unit tests for the :mod:`flask_restless.model` module."""
 from datetime import date, datetime
+from unittest2 import TestSuite
 
 from elixir import session
 
@@ -24,6 +27,9 @@ from flask.ext.restless.model import ISO8601_DATE
 from .helpers import TestSupport
 from .models import Computer
 from .models import Person
+
+
+__all__ = ['EntityTestCase']
 
 
 class EntityTestCase(TestSupport):
@@ -119,3 +125,10 @@ class EntityTestCase(TestSupport):
         self.assertFalse(created)
         self.assertEqual(second_instance.name, u'Lincoln')
         self.assertEqual(second_instance.age, 24)
+
+
+def load_tests(loader, standard_tests, pattern):
+    """Returns the test suite for this module."""
+    suite = TestSuite()
+    suite.addTest(loader.loadTestsFromTestCase(EntityTestCase))
+    return suite

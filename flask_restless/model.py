@@ -1,20 +1,21 @@
 # -*- coding: utf-8; Mode: Python -*-
 #
-# Copyright (C) 2011  Lincoln de Sousa <lincoln@comum.org>
+# Copyright (C) 2011 Lincoln de Sousa <lincoln@comum.org>
 #
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
+# This file is part of Flask-Restless.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
+# Flask-Restless is free software: you can redistribute it and/or modify it
+# under the terms of the GNU Affero General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or (at your
+# option) any later version.
+#
+# Flask-Restless is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
 #
 # You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
+# along with Flask-Restless. If not, see <http://www.gnu.org/licenses/>.
 """
     flaskext.restless.model
     ~~~~~~~~~~~~~~~~~~~~~~~
@@ -128,8 +129,7 @@ class Entity(EntityBase):
         fieldtype = getattr(cls, fieldname).property.columns[0].type
         return isinstance(fieldtype, Date) or isinstance(fieldtype, DateTime)
 
-
-    def to_dict(self, deep=dict(), exclude=list()):
+    def to_dict(self, deep=None, exclude=None):
         """Returns a dictionary representation of this instance of the entity
         with any :class:`datetime.date` or :class:`datetime.datetime` objects
         formatted as a string in ISO 8601 format.
@@ -149,11 +149,11 @@ class Entity(EntityBase):
             {'mydate': '2012-02-27', 'id': None,
              'mydatetime': '2012-02-27T15:59:43'}
 
-        The ``deep`` dictionary and ``exclude`` list are passed directly to the
+        The `deep` dictionary and `exclude` list are passed directly to the
         :meth:`elixir.entity.Entity.to_dict` method.
 
         """
-        data = super(Entity, self).to_dict(deep, exclude)
+        data = super(Entity, self).to_dict(deep or {}, exclude or [])
 
         for key, value in data.items():
             if isinstance(value, date):

@@ -2,18 +2,20 @@
 #
 # Copyright 2012 Jeffrey Finkelstein <jeffrey.finkelstein@gmail.com>
 #
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
+# This file is part of Flask-Restless.
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
+# Flask-Restless is free software: you can redistribute it and/or modify it
+# under the terms of the GNU Affero General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or (at your
+# option) any later version.
+#
+# Flask-Restless is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
 #
 # You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# along with Flask-Restless. If not, see <http://www.gnu.org/licenses/>.
 """Helper functions for unit tests in this package.
 
 New test classes should probably inherit from one of the existing ones
@@ -26,7 +28,7 @@ request.
 """
 import os
 import tempfile
-import unittest
+from unittest2 import TestCase
 
 from elixir import create_all
 from elixir import drop_all
@@ -70,7 +72,7 @@ def add_json_methods(client):
     client.deletej = deletej
 
 
-class TestSupport(unittest.TestCase):
+class TestSupport(TestCase):
     """Base class for tests which use a database."""
 
     def setUp(self):
