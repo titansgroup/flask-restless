@@ -309,6 +309,9 @@ class QueryBuilder(object):
         ``search_params`` is an instance of the :class:`SearchParameters`
         class whose fields represent the parameters of the search.
 
+        Pre-condition: the ``search_params.filters`` is a (possibly empty)
+        iterable.
+
         """
         filters = []
         for filt in search_params.filters:
