@@ -154,7 +154,7 @@ class APITestCase(TestSupportWithManager):
         self.manager.create_api(Computer, methods=['GET', 'POST'])
 
         # to facilitate searching
-        self.app.search = lambda url, q: self.app.getj(url + '?q={}'.format(q))
+        self.app.search = lambda url, q: self.app.getj(url + '?q=%s' % q)
 
     def test_post(self):
         """Test for creating a new instance of the database model using the
@@ -295,7 +295,7 @@ class APITestCase(TestSupportWithManager):
                        data=dumps({'name': 'Mary', 'age': 25}))
 
         # Trying to pass invalid data to the update method
-        resp = self.app.patch('/api/v2/person', data='Hello there')
+        resp = self.app.patchj('/api/v2/person', data='Hello there')
         self.assertEqual(resp.status_code, 400)
         self.assertEqual(loads(resp.data)['message'], 'Unable to decode data')
 
