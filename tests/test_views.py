@@ -115,6 +115,22 @@ class FunctionAPITestCase(TestSupportWithManagerPrefilled):
         self.assertIn('avg__other', data)
         self.assertEqual(data['avg__other'], 16.2)
 
+    def test_no_functions(self):
+        """Tests that if no functions are defined, an empty response is
+        returned.
+
+        """
+        # no data is invalid JSON
+        response = self.app.getj('/api/eval/person')
+        self.assertEqual(response.status_code, 400)
+        # so is the empty string
+        response = self.app.getj('/api/eval/person', data='')
+        self.assertEqual(response.status_code, 400)
+
+        # if we provide no functions, then we expect an empty response
+        response = self.app.getj('/api/eval/person', data=dumps(dict()))
+        self.assertEqual(response.status_code, 204)
+
     def test_poorly_defined_functions(self):
         """Tests that poorly defined requests for function evaluations cause an
         error message to be returned.
@@ -276,6 +292,18 @@ class APITestCase(TestSupportWithManager):
         for i in loaded:
             self.assertEqual(i['birth_date'], ('%s-%s-%s' % (
                     year, str(month).zfill(2), str(day).zfill(2))))
+
+    def test_patch_empty(self):
+        """Test for making a :http:method:`patch` request with no data."""
+        response = self.app.postj('/api/person', data=dumps(dict(name='foo')))
+        self.assertEqual(response.status_code, 201)
+        personid = loads(response.data)['id']
+        # here we really send no data
+        response = self.app.patchj('/api/person/' + str(personid))
+        self.assertEqual(response.status_code, 400)
+        # here we send the empty string (which is not valid JSON)
+        response = self.app.patchj('/api/person/' + str(personid), data='')
+        self.assertEqual(response.status_code, 400)
 
     def test_patch_many(self):
         """Test for updating a collection of instances of the model using the
@@ -640,16 +668,16 @@ class APITestCase(TestSupportWithManager):
 
         # requests which expect authentication always fails
         for i in range(3):
-            response = self.app.get('/api/v2/person')
+            response = self.app.getj('/api/v2/person')
             self.assertEqual(response.status_code, 200)
-            response = self.app.post('/api/v2/person')
+            response = self.app.postj('/api/v2/person')
             self.assertEqual(response.status_code, 401)
 
         # requests which fail on every odd request
         for i in range(3):
-            response = self.app.get('/api/v3/person')
+            response = self.app.getj('/api/v3/person')
             self.assertEqual(response.status_code, 200)
-            response = self.app.get('/api/v3/person')
+            response = self.app.getj('/api/v3/person')
             self.assertEqual(response.status_code, 401)
 
 
