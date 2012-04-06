@@ -251,7 +251,8 @@ class APIManagerTest(TestSupport):
         self.assertEqual(response.status_code, 405)
 
         # test that the same model is updated on all URLs
-        response = self.app.postj('/post/person', data=dumps(dict(name='Test')))
+        response = self.app.postj('/post/person',
+                                  data=dumps(dict(name='Test')))
         self.assertEqual(response.status_code, 201)
         response = self.app.getj('/get/person/1')
         self.assertEqual(response.status_code, 200)

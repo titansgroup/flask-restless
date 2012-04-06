@@ -567,7 +567,7 @@ class APITestCase(TestSupport):
     def test_search(self):
         """Tests basic search using the :http:method:`get` method."""
         # Trying to pass invalid params to the search method
-        resp = self.app.get('/api/person?q=Test')
+        resp = self.app.getj('/api/person?q=Test')
         self.assertEqual(resp.status_code, 400)
         self.assertEqual(loads(resp.data)['message'], 'Unable to decode data')
 
@@ -761,16 +761,16 @@ class APITestCase(TestSupport):
 
         # requests which expect authentication always fails
         for i in range(3):
-            response = self.app.get('/api/v2/person')
+            response = self.app.getj('/api/v2/person')
             self.assertEqual(response.status_code, 200)
-            response = self.app.post('/api/v2/person')
+            response = self.app.postj('/api/v2/person')
             self.assertEqual(response.status_code, 401)
 
         # requests which fail on every odd request
         for i in range(3):
-            response = self.app.get('/api/v3/person')
+            response = self.app.getj('/api/v3/person')
             self.assertEqual(response.status_code, 200)
-            response = self.app.get('/api/v3/person')
+            response = self.app.getj('/api/v3/person')
             self.assertEqual(response.status_code, 401)
 
 
