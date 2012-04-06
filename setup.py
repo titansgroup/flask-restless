@@ -18,36 +18,75 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with Flask-Restless. If not, see <http://www.gnu.org/licenses/>.
 """
-Flask-Restless
-~~~~~~~~~~~~~~
+    Flask-Restless
+    ~~~~~~~~~~~~~~
 
-Flask-Restless is a `Flask <http://flask.pocoo.org>`_ extension which
-facilitates the creation of ReSTful JSON APIs. It is compatible with models
-which have been described using `Elixir <http://elixir.ematia.de>`_, a layer on
-top of `SQLAlchemy <http://sqlalchemy.org>`_.
+    Flask-Restless is a `Flask <http://flask.pocoo.org>`_ extension which
+    facilitates the creation of ReSTful JSON APIs. It is compatible with models
+    which have been defined using `FLask-SQLAlchemy
+    <http://packages.python.org/Flask-SQLAlchemy>`_.
 
-For more information, check the World Wide Web!
+    For more information, check the World Wide Web!
 
-  * `Documentation <http://readthedocs.org/docs/flask-restless>`_
-  * `PyPI listing <http://pypi.python.org/pypi/Flask-Restless>`_
-  * `Source code repository <http://github.com/jfinkels/flask-restless>`_
+      * `Documentation <http://readthedocs.org/docs/flask-restless>`_
+      * `PyPI listing <http://pypi.python.org/pypi/Flask-Restless>`_
+      * `Source code repository <http://github.com/jfinkels/flask-restless>`_
 
 """
 from __future__ import with_statement
 
+import sys
+from setuptools import Command
 from setuptools import setup
 
+#: The installation requirements for Flask-Restless. ``simplejson`` is only
+#: required on Python version 2.5.
+requirements = ['flask>=0.7', 'flask-sqlalchemy', 'python-dateutil<2.0']
+if sys.version_info < (2, 6):
+    requirements.append('simplejson')
 
-def from_requirements_file(filename='requirements.txt'):
-    """Returns a list of required Python packages from the file whose path is
-    given by `filename`.
 
-    By default, `filename` is the conventional :file:`requirements.txt` file.
+class run_coverage(Command):
+    """Runs ``coverage``, the Python code coverage tool to generate a test
+    coverage report.
+
+    This command requires that `coverage.py
+    <http://nedbatchelder.com/code/coverage>`_ is installed. This can be done
+    by doing, for example::
+
+        pip install coverage
 
     """
-    with open(filename, 'r') as f:
-        requirements = f.read()
-    return requirements.split()
+
+    #: A brief description of the command.
+    description = "Generate a test coverage report."
+
+    #: Options which can be provided by the user.
+    user_options = []
+
+    def initialize_options(self):
+        """Intentionally unimplemented."""
+        pass
+
+    def finalize_options(self):
+        """Intentionally unimplemented."""
+        pass
+
+    def run(self):
+        """Runs coverage.py on the test suite then generates an HTML report,
+        both in a subprocess.
+
+        """
+        import subprocess
+        try:
+            subprocess.call(['coverage', 'run', '--source=flask_restless',
+                             '--branch', 'run-tests.py'])
+            subprocess.call(['coverage', 'html'])
+        except OSError:
+            print('coverage.py not found.'
+                  ' Install it with "pip install coverage".')
+            sys.exit(-1)
+        print('HTML coverage report generated at "htmlcov/".')
 
 
 setup(
@@ -64,9 +103,10 @@ setup(
         'Topic :: Internet :: WWW/HTTP',
         'Topic :: Software Development :: Libraries :: Python Modules'
     ],
+    cmdclass={'coverage': run_coverage},
     description='A Flask extension for easy ReSTful API generation',
     download_url='http://pypi.python.org/pypi/Flask-Restless',
-    install_requires=from_requirements_file(),
+    install_requires=requirements,
     include_package_data=True,
     keywords=['ReST', 'API', 'Flask', 'Elixir'],
     license='GNU AGPLv3+',
@@ -77,6 +117,6 @@ setup(
     test_suite='tests.suite',
     tests_require=['unittest2'],
     url='http://github.com/jfinkels/flask-restless',
-    version='0.4-dev',
+    version='0.5-dev',
     zip_safe=False
 )

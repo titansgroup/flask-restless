@@ -18,30 +18,45 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with Flask-Restless. If not, see <http://www.gnu.org/licenses/>.
 """
-    flaskext.restless.views
-    ~~~~~~~~~~~~~~~~~~~~~~~
+    flask.ext.restless.views
+    ~~~~~~~~~~~~~~~~~~~~~~~~
 
-    Provides :class:`API`, a subclass of :class:`flask.MethodView` which
-    provides generic endpoints for HTTP requests for information about a given
-    model from the database.
+    Provides the following view classes, subclasses of
+    :class:`flask.MethodView` which provide generic endpoints for interacting
+    with an entity of the database:
+
+    :class:`flask.ext.restless.views.API`
+      Provides the endpoints for each of the basic HTTP methods. This is the
+      main class used by the
+      :meth:`flask.ext.restless.manager.APIManager.create_api` method to create
+      endpoints.
+
+    :class:`flask.ext.restless.views.FunctionAPI`
+      Provides a :http:method:`get` endpoint which returns the result of
+      evaluating some function on the entire collection of a given model.
 
     :copyright:2011 by Lincoln de Sousa <lincoln@comum.org>
     :copyright:2012 Jeffrey Finkelstein <jeffrey.finkelstein@gmail.com>
     :license: GNU AGPLv3, see COPYING for more details
 
 """
+import datetime
 
 from dateutil.parser import parse as parse_datetime
-from elixir import session
 from flask import abort
 from flask import json
 from flask import jsonify
-from flask import make_response
 from flask import request
 from flask.views import MethodView
+from sqlalchemy import Date
+from sqlalchemy import DateTime
 from sqlalchemy.exc import OperationalError
+from sqlalchemy.orm import ColumnProperty
+from sqlalchemy.orm import object_mapper
+from sqlalchemy.orm import RelationshipProperty
 from sqlalchemy.orm.exc import MultipleResultsFound
 from sqlalchemy.orm.exc import NoResultFound
+from sqlalchemy.orm.properties import RelationshipProperty as RelProperty
 from sqlalchemy.sql import func
 from werkzeug.exceptions import BadRequest
 
@@ -61,11 +76,155 @@ def jsonify_status_code(status_code, *args, **kw):
     return response
 
 
-def _evaluate_functions(model, functions):
+def _is_date_field(model, fieldname):
+    """Returns ``True`` if and only if the field of `model` with the specified
+    name corresponds to either a :class:`datetime.date` object or a
+    :class:`datetime.datetime` object.
+
+    """
+    prop = getattr(model, fieldname).property
+    if isinstance(prop, RelationshipProperty):
+        return False
+    fieldtype = prop.columns[0].type
+    return isinstance(fieldtype, Date) or isinstance(fieldtype, DateTime)
+
+
+def _get_or_create(session, model, **kwargs):
+    """Returns the first instance of the specified model filtered by the
+    keyword arguments, or creates a new instance of the model and returns that.
+
+    This function returns a two-tuple in which the first element is the created
+    or retrieved instance and the second is a boolean value which is ``True``
+    if and only if an instance was created.
+
+    The idea for this function is based on Django's ``Model.get_or_create()``
+    method.
+
+    `session` is the session in which all database transactions are made (this
+    should be :attr:`flask.ext.sqlalchemy.SQLAlchemy.session`).
+
+    `model` is the SQLAlchemy model to get or create (this should be a subclass
+    of :class:`~flask.ext.restless.model.Entity`).
+
+    `kwargs` are the keyword arguments which will be passed to the
+    :func:`sqlalchemy.orm.query.Query.filter_by` function.
+
+    """
+    # TODO document that this uses the .first() function
+    instance = model.query.filter_by(**kwargs).first()
+    if instance:
+        return instance, False
+    else:
+        instance = model(**kwargs)
+        session.add(instance)
+        session.commit()
+        return instance, True
+
+
+def _get_columns(model):
+    """Returns a dictionary-like object containing all the columns of the
+    specified `model` class.
+
+    """
+    return model._sa_class_manager
+
+
+def _get_related_model(model, relationname):
+    """Gets the class of the model to which `model` is related by the attribute
+    whose name is `relationname`.
+
+    """
+    return _get_columns(model)[relationname].property.mapper.class_
+
+
+def _get_relations(model):
+    """Returns a list of relation names of `model` (as a list of strings)."""
+    cols = _get_columns(model)
+    return [k for k in cols if isinstance(cols[k].property, RelProperty)]
+
+
+# This code was adapted from :meth:`elixir.entity.Entity.to_dict` and
+# http://stackoverflow.com/q/1958219/108197.
+#
+# TODO should we have an `include` argument also?
+def _to_dict(instance, deep=None, exclude=None):
+    """Returns a dictionary representing the fields of the specified `instance`
+    of a SQLAlchemy model.
+
+    `deep` is a dictionary containing a mapping from a relation name (for a
+    relation of `instance`) to either a list or a dictionary. This is a
+    recursive structure which represents the `deep` argument when calling
+    `_to_dict` on related instances. When an empty list is encountered,
+    `_to_dict` returns a list of the string representations of the related
+    instances.
+
+    `exclude` specifies the columns which will *not* be present in the returned
+    dictionary representation of the object.
+
+    """
+    deep = deep or {}
+    exclude = exclude or ()
+    # create the dictionary mapping column name to value
+    columns = (p.key for p in object_mapper(instance).iterate_properties
+               if isinstance(p, ColumnProperty))
+    result = dict((col, getattr(instance, col)) for col in columns)
+    # Convert datetime and date objects to ISO 8601 format.
+    #
+    # TODO We can get rid of this when issue #33 is resolved.
+    for key, value in result.items():
+        if isinstance(value, datetime.date):
+            result[key] = value.isoformat()
+    # recursively call _to_dict on each of the `deep` relations
+    for relation, rdeep in deep.iteritems():
+        # exclude foreign keys of the related object for the recursive call
+        relationproperty = object_mapper(instance).get_property(relation)
+        newexclude = (key.name for key in relationproperty.remote_side)
+        # get the related value so we can see if it is None or a list
+        relatedvalue = getattr(instance, relation)
+        if relatedvalue is None:
+            result[relation] = None
+        elif isinstance(relatedvalue, list):
+            result[relation] = [_to_dict(inst, rdeep, newexclude)
+                                for inst in relatedvalue]
+        else:
+            result[relation] = _to_dict(relatedvalue, rdeep, newexclude)
+    return result
+
+
+def _include_keys(dictionary, keys):
+    """Returns a new dictionary containing only the mappings from `dictionary`
+    with keys as specified in `keys`.
+
+    """
+    return dict((k, v) for k, v in dictionary.items() if k in keys)
+
+
+def _to_dict_include(instance, deep=None, exclude=None, include=None):
+    """Returns the dictionary representation of `instance` as returned by
+    :func:`_to_dict`, but only with the fields specified by `include` (if it is
+    not ``None``).
+
+    If `include` is ``None``, all keys will be included. If it is an iterable
+    of strings, only those keys will be included in the returned dictionary.
+
+    """
+    result = _to_dict(instance, deep, exclude)
+    if include is None:
+        return result
+    return _include_keys(result, include)
+
+
+def _evaluate_functions(session, model, functions):
     """Executes each of the SQLAlchemy functions specified in ``functions``, a
     list of dictionaries of the form described below, on the given model and
     returns a dictionary mapping function name (slightly modified, see below)
     to result of evaluation of that function.
+
+    `session` is the SQLAlchemy session in which all database transactions will
+    be performed.
+
+    `model` is the :class:`flask.ext.restless.Entity` object on which the
+    specified functions will be evaluated.
 
     ``functions`` is a list of dictionaries of the form::
 
@@ -133,19 +292,28 @@ def _evaluate_functions(model, functions):
 
 class ModelView(MethodView):
     """Base class for :class:`flask.MethodView` classes which represent a view
-    of an Elixir model.
+    of a SQLAlchemy model.
+
+    The model class for this view can be accessed from the :attr:`model`
+    attribute, and the session in which all database transactions will be
+    performed when dealing with this model can be accessed from the
+    :attr:`session` attribute.
 
     """
 
-    def __init__(self, model, *args, **kw):
+    def __init__(self, session, model, *args, **kw):
         """Calls the constructor of the superclass and specifies the model for
         which this class provides a ReSTful API.
 
-        ``model`` is the :class:`elixir.entity.Entity` class of the database
-        model for which this instance of the class is an API.
+        `session` is the SQLAlchemy session in which all database transactions
+        will be performed.
+
+        `model` is the SQLALchemy declarative model class of the database model
+        for which this instance of the class is an API.
 
         """
         super(ModelView, self).__init__(*args, **kw)
+        self.session = session
         self.model = model
 
 
@@ -165,20 +333,15 @@ class FunctionAPI(ModelView):
         :ref:`functionevaluation`.
 
         """
-        # if there is no data, return the empty JSON object
-        if not request.data:
-            return jsonify()
-        # if parsing JSON fails, return a 400 error in JSON format
         try:
             data = request.json
         except BadRequest:
             return jsonify_status_code(400, message='Unable to decode data')
-        # if there is no 'functions' mapping, return the empty JSON object
-        if 'functions' not in data:
-            return jsonify()
-        # try to evaluate the functions
         try:
-            result = _evaluate_functions(self.model, data['functions'])
+            result = _evaluate_functions(self.session, self.model,
+                                         data.get('functions'))
+            if not result:
+                return jsonify_status_code(204)
             return jsonify(result)
         except AttributeError, exception:
             message = 'No such field "%s"' % exception.field
@@ -196,12 +359,17 @@ class API(ModelView):
 
     """
 
-    def __init__(self, model, authentication_required_for=None,
-                 authentication_function=None, *args, **kw):
+    def __init__(self, session, model, authentication_required_for=None,
+                 authentication_function=None, include_columns=None,
+                 validation_exceptions=None, *args, **kw):
         """Instantiates this view with the specified attributes.
 
+        `session` is the SQLAlchemy session in which all database transactions
+        will be performed.
+
         `model` is the :class:`flask_restless.Entity` class of the database
-        model for which this instance of the class is an API.
+        model for which this instance of the class is an API. This model should
+        live in `database`.
 
         `authentication_required_for` is a list of HTTP method names (for
         example, ``['POST', 'PATCH']``) for which authentication must be
@@ -216,17 +384,47 @@ class API(ModelView):
         Pre-condition (callers must satisfy): if `authentication_required_for`
         is specified, so must `authentication_function`.
 
+        `validation_exceptions` is the tuple of exceptions raised by backend
+        validation (if any exist). If exceptions are specified here, any
+        exceptions which are caught when writing to the database. Will be
+        returned to the client as a :http:statuscode:`400` response with a
+        message specifying the validation error which occurred. For more
+        information, see :ref:`validation`.
+
+        `include_columns` is a list of strings which name the columns of
+        `model` which will be included in the JSON representation of that model
+        provided in response to :http:method:`get` requests. Only the named
+        columns will be included. If this list includes a string which does not
+        name a column in `model`, it will be ignored.
+
+        .. versionadded:: 0.5
+           Added the `include_columns` keyword argument.
+
+        .. versionadded:: 0.5
+           Added the `validation_exceptions` keyword argument.
+
+        .. versionadded:: 0.4
+           Added the `authentication_required_for` keyword argument.
+
+        .. versionadded:: 0.4
+           Added the `authentication_function` keyword argument.
+
         """
-        super(API, self).__init__(model, *args, **kw)
+        super(API, self).__init__(session, model, *args, **kw)
         self.authentication_required_for = authentication_required_for or ()
         self.authentication_function = authentication_function
         # convert HTTP method names to uppercase
         self.authentication_required_for = \
             frozenset([m.upper() for m in self.authentication_required_for])
+        self.include_columns = include_columns
+        self.validation_exceptions = tuple(validation_exceptions or ())
 
     def _add_to_relation(self, query, relationname, toadd=None):
         """Adds a new or existing related model to each model specified by
         `query`.
+
+        This function does not commit the changes made to the database. The
+        calling function has that responsibility.
 
         `query` is a SQLAlchemy query instance that evaluates to all instances
         of the model specified in the constructor of this class that should be
@@ -238,21 +436,26 @@ class API(ModelView):
         `toadd` is a list of dictionaries, each representing the attributes of
         an existing or new related model to add. If a dictionary contains the
         key ``'id'``, that instance of the related model will be
-        added. Otherwise, the :classmethod:`~flask.ext.model.get_or_create`
-        class method will be used to get or create a model to add.
+        added. Otherwise, the
+        :classmethod:`~flask.ext.restless.model.get_or_create` class method
+        will be used to get or create a model to add.
 
         """
-        submodel = self.model.get_related_model(relationname)
+        submodel = _get_related_model(self.model, relationname)
         for dictionary in toadd or []:
             if 'id' in dictionary:
-                subinst = submodel.get_by(id=dictionary['id'])
+                subinst = submodel.query.get(dictionary['id'])
             else:
-                subinst = submodel.get_or_create(**dictionary)[0]
+                subinst = _get_or_create(self.session, submodel,
+                                         **dictionary)[0]
             for instance in query:
                 getattr(instance, relationname).append(subinst)
 
     def _remove_from_relation(self, query, relationname, toremove=None):
         """Removes a related model from each model specified by `query`.
+
+        This function does not commit the changes made to the database. The
+        calling function has that responsibility.
 
         `query` is a SQLAlchemy query instance that evaluates to all instances
         of the model specified in the constructor of this class that should be
@@ -272,17 +475,18 @@ class API(ModelView):
         from each instance of the model in the specified query.
 
         """
-        submodel = self.model.get_related_model(relationname)
+        submodel = _get_related_model(self.model, relationname)
         for dictionary in toremove or []:
             remove = dictionary.pop('__delete__', False)
             if 'id' in dictionary:
-                subinst = submodel.get_by(id=dictionary['id'])
+                subinst = submodel.query.get(dictionary['id'])
             else:
-                subinst = submodel.get_by(**dictionary)
+                # TODO document that we use .first() here
+                subinst = submodel.query.filter_by(**dictionary).first()
             for instance in query:
                 getattr(instance, relationname).remove(subinst)
             if remove:
-                subinst.delete()
+                self.session.delete(subinst)
 
     # TODO change this to have more sensible arguments
     def _update_relations(self, query, params):
@@ -319,7 +523,7 @@ class API(ModelView):
         specified query.
 
         """
-        relations = self.model.get_relations()
+        relations = _get_relations(self.model)
         tochange = frozenset(relations) & frozenset(params)
         for columnname in tochange:
             toadd = params[columnname].get('add', [])
@@ -327,6 +531,51 @@ class API(ModelView):
             self._add_to_relation(query, columnname, toadd=toadd)
             self._remove_from_relation(query, columnname, toremove=toremove)
         return tochange
+
+    def _handle_validation_exception(self, exception):
+        """Rolls back the session, extracts validation error messages, and
+        returns a :func:`flask.jsonify` response with :http:statuscode:`400`
+        containing the extracted validation error messages.
+
+        Again, *this method calls
+        :meth:`sqlalchemy.orm.session.Session.rollback`*.
+
+        """
+        self.session.rollback()
+        errors = self._extract_error_messages(exception) or \
+            'Could not determine specific validation errors'
+        return jsonify_status_code(400, validation_errors=errors)
+
+    def _extract_error_messages(self, exception):
+        """Tries to extract a dictionary mapping field name to validation error
+        messages from `exception`, which is a validation exception as provided
+        in the ``validation_exceptions`` keyword argument in the constructor of
+        this class.
+
+        Since the type of the exception is provided by the user in the
+        constructor of this class, we don't know for sure where the validation
+        error messages live inside `exception`. Therefore this method simply
+        attempts to access a few likely attributes and returns the first one it
+        finds (or ``None`` if no error messages dictionary can be extracted).
+
+        """
+        # 'errors' comes from sqlalchemy_elixir_validations
+        if hasattr(exception, 'errors'):
+            return exception.errors
+        # 'message' comes from savalidation
+        if hasattr(exception, 'message'):
+            # TODO this works only if there is one validation error
+            left, right = exception.message.rsplit(':', 1)
+            try:
+                left_bracket = left.rindex('[')
+                right_bracket = right.rindex(']')
+            except ValueError:
+                # could not parse the string; we're not trying too hard here...
+                return None
+            msg = right[:right_bracket].strip(' "')
+            fieldname = left[left_bracket + 1:].strip()
+            return {fieldname: msg}
+        return None
 
     def _strings_to_dates(self, dictionary):
         """Returns a new dictionary with all the mappings of `dictionary` but
@@ -346,7 +595,7 @@ class API(ModelView):
         """
         result = {}
         for fieldname, value in dictionary.iteritems():
-            if self.model.is_date_or_datetime(fieldname):
+            if _is_date_field(self.model, fieldname):
                 result[fieldname] = parse_datetime(value)
             else:
                 result[fieldname] = value
@@ -426,22 +675,25 @@ class API(ModelView):
 
         # perform a filtered search
         try:
-            result = search(self.model, data)
+            result = search(self.session, self.model, data)
         except NoResultFound:
             return jsonify(message='No result found')
         except MultipleResultsFound:
             return jsonify(message='Multiple results found')
 
-        # create a placeholder for relations of the returned models
-        relations = self.model.get_relations()
-        deep = dict(zip(relations, [{}] * len(relations)))
+        # create a placeholder for the relations of the returned models
+        relations = _get_relations(self.model)
+        deep = dict((r, {}) for r in relations)
 
         # for security purposes, don't transmit list as top-level JSON
         if isinstance(result, list):
-            result = [x.to_dict(deep) for x in result]
-            return jsonify(objects=result)
+            objects = [_to_dict_include(x, include=self.include_columns)
+                       for x in result]
+            return jsonify(objects=objects)
         else:
-            return jsonify(result.to_dict(deep))
+            result = _to_dict_include(result, deep,
+                                      include=self.include_columns)
+            return jsonify(result)
 
     def _check_authentication(self):
         """If the specified HTTP method requires authentication (see the
@@ -464,21 +716,20 @@ class API(ModelView):
         the specified model.
 
         If ``instid`` is an integer, this method returns the instance of the
-        model with that identifying integer. (Implementation note: the
-        underlying implementation uses the :func:`elixir.entity.Entity.get_by`
-        method.) If no such instance exists, this method responds with
-        :http:status:`404`.
+        model with that identifying integer. If no such instance exists, this
+        method responds with :http:status:`404`.
 
         """
         self._check_authentication()
         if instid is None:
             return self._search()
-        inst = self.model.get_by(id=instid)
+        inst = self.model.query.get(instid)
         if inst is None:
             abort(404)
-        relations = self.model.get_relations()
-        deep = dict(zip(relations, [{} for n in range(len(relations))]))
-        return jsonify(inst.to_dict(deep))
+        relations = _get_relations(self.model)
+        deep = dict((r, {}) for r in relations)
+        result = _to_dict_include(inst, deep, include=self.include_columns)
+        return jsonify(result)
 
     def delete(self, instid):
         """Removes the specified instance of the model with the specified name
@@ -490,11 +741,11 @@ class API(ModelView):
 
         """
         self._check_authentication()
-        inst = self.model.get_by(id=instid)
+        inst = self.model.query.get(instid)
         if inst is not None:
-            inst.delete()
-            session.commit()
-        return make_response(None, 204)
+            self.session.delete(inst)
+            self.session.commit()
+        return jsonify_status_code(204)
 
     def post(self):
         """Creates a new instance of a given model based on request data.
@@ -523,29 +774,37 @@ class API(ModelView):
         except BadRequest:
             return jsonify_status_code(400, message='Unable to decode data')
         # Getting the list of relations that will be added later
-        cols = self.model.get_columns()
-        relations = self.model.get_relations()
+        cols = _get_columns(self.model)
+        relations = _get_relations(self.model)
 
         # Looking for what we're going to set on the model right now
         colkeys = cols.keys()
         paramkeys = params.keys()
         props = set(colkeys).intersection(paramkeys).difference(relations)
 
-        # Instantiate the model with the parameters
-        instance = self.model(**dict([(i, params[i]) for i in props]))
+        # Special case: if there are any dates, convert the string form of the
+        # date into an instance of the Python ``datetime`` object.
+        params = self._strings_to_dates(params)
 
-        # Handling relations, a single level is allowed
-        for col in set(relations).intersection(paramkeys):
-            submodel = cols[col].property.mapper.class_
-            for subparams in params[col]:
-                subinst = submodel.get_or_create(**subparams)[0]
-                getattr(instance, col).append(subinst)
+        try:
+            # Instantiate the model with the parameters
+            instance = self.model(**dict([(i, params[i]) for i in props]))
 
-        # add the created model to the session
-        session.add(instance)
-        session.commit()
+            # Handling relations, a single level is allowed
+            for col in set(relations).intersection(paramkeys):
+                submodel = cols[col].property.mapper.class_
+                for subparams in params[col]:
+                    subinst = _get_or_create(self.session, submodel,
+                                             **subparams)[0]
+                    getattr(instance, col).append(subinst)
 
-        return jsonify_status_code(201, id=instance.id)
+            # add the created model to the session
+            self.session.add(instance)
+            self.session.commit()
+
+            return jsonify_status_code(201, id=instance.id)
+        except self.validation_exceptions, exception:
+            return self._handle_validation_exception(exception)
 
     def patch(self, instid):
         """Updates the instance specified by ``instid`` of the named model, or
@@ -564,22 +823,21 @@ class API(ModelView):
 
         """
         self._check_authentication()
-        # If there is no data to update, just return HTTP 204 No Content.
-        if len(request.data) == 0:
-            return make_response(None, 204)
+
         # try to load the fields/values to update from the body of the request
         try:
             data = request.json
         except BadRequest:
+            # this also happens when request.data is empty
             return jsonify_status_code(400, message='Unable to decode data')
 
         patchmany = instid is None
         if patchmany:
             # create a SQLALchemy Query from the query parameter `q`
-            query = create_query(self.model, data)
+            query = create_query(self.session, self.model, data)
         else:
             # create a SQLAlchemy Query which has exactly the specified row
-            query = self.model.query.filter_by(id=instid)
+            query = self.session.query(self.model).filter_by(id=instid)
             assert query.count() == 1, 'Multiple rows with same ID'
 
         relations = self._update_relations(query, data)
@@ -590,11 +848,14 @@ class API(ModelView):
         # date into an instance of the Python ``datetime`` object.
         params = self._strings_to_dates(params)
 
-        # Let's update all instances present in the query
-        num_modified = 0
-        if params:
-            num_modified = query.update(params, False)
-        session.commit()
+        try:
+            # Let's update all instances present in the query
+            num_modified = 0
+            if params:
+                num_modified = query.update(params, False)
+            self.session.commit()
+        except self.validation_exceptions, exception:
+            return self._handle_validation_exception(exception)
 
         if patchmany:
             return jsonify(num_modified=num_modified)

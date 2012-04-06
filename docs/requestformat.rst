@@ -1,5 +1,7 @@
 .. _requestformat:
 
+.. currentmodule:: flask.ext.restless
+
 Format of requests and responses
 ================================
 
@@ -9,20 +11,28 @@ mimetype and/or content type.
 
 Suppose we have the following models::
 
-    from flask.ext.restless import Entity
-    from elixir import Date, DateTime, Field, Unicode
-    from elixir import ManyToOne, OneToMany
+    from flask import Flask
+    from flask.ext.sqlalchemy import SQLAlchemy
 
-    class Person(Entity):
-        name = Field(Unicode, unique=True)
-        birth_date = Field(Date)
-        computers = OneToMany('Computer')
+    app = Flask(__name__)
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////tmp/test.db'
+    db = SQLAlchemy(app)
 
-    class Computer(flask.ext.restless.Entity):
-        name = Field(Unicode, unique=True)
-        vendor = Field(Unicode)
-        owner = ManyToOne('Person')
-        purchase_time = Field(DateTime)
+    class Person(db.Model):
+        id = db.Column(db.Integer, primary_key=True)
+        name = db.Column(db.Unicode, unique=True)
+        birth_date = db.Column(db.Date)
+        computers = db.relationship('Computer',
+                                    backref=db.backref('owner',
+                                                       lazy='dynamic'))
+
+    class Computer(db.Model):
+        id = db.Column(db.Integer, primary_key=True)
+        name = db.Column(db.Unicode, unique=True)
+        vendor = db.Column(db.Unicode)
+        owner_id = db.Column(db.Integer, db.ForeignKey('person.id'))
+        purchase_time = db.Column(db.DateTime)
+
 
 Also suppose we have registered an API for these models at ``/api/person`` and
 ``/api/computer``, respectively.
@@ -331,9 +341,9 @@ Function evaluation
 -------------------
 
 If the ``allow_functions`` keyword argument is set to ``True`` when creating an
-API for a model using :meth:`flask_restless.APIManager.create_api`, then an
-endpoint will be made available for :http:get:`/api/eval/person` which responds
-to requests for evaluation of functions on all instances the model.
+API for a model using :meth:`APIManager.create_api`, then an endpoint will be
+made available for :http:get:`/api/eval/person` which responds to requests for
+evaluation of functions on all instances the model.
 
 **Sample request**:
 
