@@ -34,6 +34,8 @@ from flask.ext.restless.views import _get_relations
 from flask.ext.restless.views import _to_dict
 from flask.ext.restless.manager import IllegalArgumentError
 
+from .helpers import setUpModule
+from .helpers import tearDownModule
 from .helpers import TestSupport
 from .helpers import TestSupportPrefilled
 
@@ -282,7 +284,7 @@ class APITestCase(TestSupport):
         # assert loads(response.data)['error_list'].keys() == ['age']
 
         response = self.app.postj('/api/person',
-                                  data=dumps({'name': 'Lincoln', 'age': 23}))
+                                  data=dumps({'name': u'Lincoln', 'age': 23}))
         self.assertEqual(response.status_code, 201)
         self.assertIn('id', loads(response.data))
 
@@ -311,7 +313,7 @@ class APITestCase(TestSupport):
         """
         # Creating the person who's gonna be deleted
         response = self.app.postj('/api/person',
-                                  data=dumps({'name': 'Lincoln', 'age': 23}))
+                                  data=dumps({'name': u'Lincoln', 'age': 23}))
         self.assertEqual(response.status_code, 201)
         self.assertIn('id', loads(response.data))
 
@@ -358,11 +360,11 @@ class APITestCase(TestSupport):
 
         # Creating some people
         self.app.postj('/api/v2/person',
-                       data=dumps({'name': 'Lincoln', 'age': 23}))
+                       data=dumps({'name': u'Lincoln', 'age': 23}))
         self.app.postj('/api/v2/person',
-                       data=dumps({'name': 'Lucy', 'age': 23}))
+                       data=dumps({'name': u'Lucy', 'age': 23}))
         self.app.postj('/api/v2/person',
-                       data=dumps({'name': 'Mary', 'age': 25}))
+                       data=dumps({'name': u'Mary', 'age': 25}))
 
         # change a single entry
         resp = self.app.putj('/api/v2/person/1', data=dumps({'age': 24}))
@@ -408,11 +410,11 @@ class APITestCase(TestSupport):
 
         # Creating some people
         self.app.postj('/api/v2/person',
-                       data=dumps({'name': 'Lincoln', 'age': 23}))
+                       data=dumps({'name': u'Lincoln', 'age': 23}))
         self.app.postj('/api/v2/person',
-                       data=dumps({'name': 'Lucy', 'age': 23}))
+                       data=dumps({'name': u'Lucy', 'age': 23}))
         self.app.postj('/api/v2/person',
-                       data=dumps({'name': 'Mary', 'age': 25}))
+                       data=dumps({'name': u'Mary', 'age': 25}))
 
         # Trying to pass invalid data to the update method
         resp = self.app.patchj('/api/v2/person', data='Hello there')
@@ -437,7 +439,7 @@ class APITestCase(TestSupport):
         :http:method:`patch` method.
 
         """
-        resp = self.app.postj('/api/person', data=dumps({'name': 'Lincoln',
+        resp = self.app.postj('/api/person', data=dumps({'name': u'Lincoln',
                                                          'age': 10}))
         self.assertEqual(resp.status_code, 201)
         self.assertIn('id', loads(resp.data))
@@ -726,6 +728,26 @@ class APITestCase(TestSupport):
         response = self.app.getj('/api/person/' + str(personid))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.mimetype, 'application/json')
+
+    def test_search_bad_arguments(self):
+        """Tests that search requests with bad parameters respond with an error
+        message.
+
+        """
+        # missing argument
+        d = dict(filters=[dict(name='name', op='==')])
+        resp = self.app.search('/api/person', dumps(d))
+        self.assertEqual(resp.status_code, 400)
+
+        # missing operator
+        d = dict(filters=[dict(name='name', val='Test')])
+        resp = self.app.search('/api/person', dumps(d))
+        self.assertEqual(resp.status_code, 400)
+
+        # missing fieldname
+        d = dict(filters=[dict(op='==', val='Test')])
+        resp = self.app.search('/api/person', dumps(d))
+        self.assertEqual(resp.status_code, 400)
 
     def test_authentication(self):
         """Tests basic authentication using custom authentication functions."""
