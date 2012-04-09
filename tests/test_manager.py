@@ -256,18 +256,18 @@ class APIManagerTest(TestSupport):
         response = self.app.postj('/post/person',
                                   data=dumps(dict(name='Test')))
         self.assertEqual(response.status_code, 201)
-        response = self.app.get('/get/person/1')
+        response = self.app.getj('/get/person/1')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(loads(response.data)['name'], 'Test')
         response = self.app.patchj('/patch/person/1',
                                    data=dumps(dict(name='Foo')))
         self.assertEqual(response.status_code, 200)
-        response = self.app.get('/get/person/1')
+        response = self.app.getj('/get/person/1')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(loads(response.data)['name'], 'Foo')
         response = self.app.delete('/delete/person/1')
         self.assertEqual(response.status_code, 204)
-        response = self.app.get('/get/person/1')
+        response = self.app.getj('/get/person/1')
         self.assertEqual(response.status_code, 404)
 
 

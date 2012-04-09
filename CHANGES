@@ -13,8 +13,8 @@ Version 0.5
 
 Not yet released.
 
-- Use Flask's :attr:`flask.Request.json` to parse incoming JSON requests.
 - Added capturing of exceptions raised during field validation.
+- Use Flask's :attr:`flask.Request.json` to parse incoming JSON requests.
 - Added :file:`examples/separate_endpoints.py`, showing how to create separate
   API endpoints for a single model.
 - Added ``include_columns`` keyword argument to

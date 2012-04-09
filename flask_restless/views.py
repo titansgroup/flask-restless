@@ -831,6 +831,7 @@ class API(ModelView):
         try:
             data = request.json
         except BadRequest:
+            # this also happens when request.data is empty
             return jsonify_status_code(400, message='Unable to decode data')
 
         patchmany = instid is None
