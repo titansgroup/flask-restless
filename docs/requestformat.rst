@@ -7,7 +7,8 @@ Format of requests and responses
 
 Requests and responses are all in JSON format, so the mimetype is
 :mimetype:`application/json`. Ensure that requests you make have the correct
-mimetype and/or content type.
+mimetype and/or content type; if they do not, the server will respond with a
+:http:statuscode:`400` (in JSON format).
 
 Suppose we have the following models::
 

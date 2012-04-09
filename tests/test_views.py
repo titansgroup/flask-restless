@@ -795,6 +795,30 @@ class APITestCase(TestSupport):
             response = self.app.getj('/api/v3/person')
             self.assertEqual(response.status_code, 401)
 
+    def test_content_type_not_json(self):
+        """Tests that requests which do not have ``Content-Type:
+        application/json`` generate JSON error responses.
+
+        """
+        response = self.app.post('/api/person', data=dumps(dict(name=u'foo')))
+        self.assertEqual(response.status_code, 400)
+        response = self.app.postj('/api/person', data=dumps(dict(name=u'foo')))
+        self.assertEqual(response.status_code, 201)
+        response = self.app.get('/api/person/1')
+        self.assertEqual(response.status_code, 400)
+        response = self.app.getj('/api/person/1')
+        self.assertEqual(response.status_code, 200)
+        response = self.app.patch('/api/person/1',
+                                  data=dumps(dict(name=u'bar')))
+        self.assertEqual(response.status_code, 400)
+        response = self.app.patchj('/api/person/1',
+                                   data=dumps(dict(name=u'bar')))
+        self.assertEqual(response.status_code, 200)
+        response = self.app.delete('/api/person/1')
+        self.assertEqual(response.status_code, 400)
+        response = self.app.deletej('/api/person/1')
+        self.assertEqual(response.status_code, 204)
+
 
 def load_tests(loader, standard_tests, pattern):
     """Returns the test suite for this module."""
