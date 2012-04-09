@@ -324,7 +324,7 @@ class APITestCase(TestSupport):
         self.assertEqual(loads(response.data), inst)
 
         # Deleting it
-        response = self.app.delete('/api/person/1')
+        response = self.app.deletej('/api/person/1')
         self.assertEqual(response.status_code, 204)
 
         # Making sure it has been deleted
@@ -338,7 +338,7 @@ class APITestCase(TestSupport):
         since the :http:method:`delete` method is an idempotent method.
 
         """
-        response = self.app.delete('/api/person/1')
+        response = self.app.deletej('/api/person/1')
         self.assertEqual(response.status_code, 204)
 
     def test_disallow_patch_many(self):

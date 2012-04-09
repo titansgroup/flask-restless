@@ -57,7 +57,7 @@ class APIManagerTest(TestSupport):
 
         # make a request on the API
         #client = app.test_client()
-        response = self.app.get('/api/person')
+        response = self.app.getj('/api/person')
         self.assertEqual(response.status_code, 200)
 
     def test_create_api(self):
@@ -220,36 +220,36 @@ class APIManagerTest(TestSupport):
         response = self.app.patchj('/patch/person/1',
                                   data=dumps(dict(name='foo')))
         self.assertEqual(response.status_code, 200)
-        response = self.app.delete('/delete/person/1')
+        response = self.app.deletej('/delete/person/1')
         self.assertEqual(response.status_code, 204)
 
         # test for incorrect requests
-        response = self.app.get('/post/person')
+        response = self.app.getj('/post/person')
         self.assertEqual(response.status_code, 405)
-        response = self.app.get('/patch/person/1')
+        response = self.app.getj('/patch/person/1')
         self.assertEqual(response.status_code, 405)
-        response = self.app.get('/delete/person/1')
-        self.assertEqual(response.status_code, 405)
-
-        response = self.app.post('/get/person')
-        self.assertEqual(response.status_code, 405)
-        response = self.app.post('/patch/person/1')
-        self.assertEqual(response.status_code, 405)
-        response = self.app.post('/delete/person/1')
+        response = self.app.getj('/delete/person/1')
         self.assertEqual(response.status_code, 405)
 
-        response = self.app.patch('/get/person')
+        response = self.app.postj('/get/person')
         self.assertEqual(response.status_code, 405)
-        response = self.app.patch('/post/person')
+        response = self.app.postj('/patch/person/1')
         self.assertEqual(response.status_code, 405)
-        response = self.app.patch('/delete/person/1')
+        response = self.app.postj('/delete/person/1')
         self.assertEqual(response.status_code, 405)
 
-        response = self.app.delete('/get/person')
+        response = self.app.patchj('/get/person')
         self.assertEqual(response.status_code, 405)
-        response = self.app.delete('/post/person')
+        response = self.app.patchj('/post/person')
         self.assertEqual(response.status_code, 405)
-        response = self.app.delete('/patch/person/1')
+        response = self.app.patchj('/delete/person/1')
+        self.assertEqual(response.status_code, 405)
+
+        response = self.app.deletej('/get/person')
+        self.assertEqual(response.status_code, 405)
+        response = self.app.deletej('/post/person')
+        self.assertEqual(response.status_code, 405)
+        response = self.app.deletej('/patch/person/1')
         self.assertEqual(response.status_code, 405)
 
         # test that the same model is updated on all URLs
@@ -265,7 +265,7 @@ class APIManagerTest(TestSupport):
         response = self.app.getj('/get/person/1')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(loads(response.data)['name'], 'Foo')
-        response = self.app.delete('/delete/person/1')
+        response = self.app.deletej('/delete/person/1')
         self.assertEqual(response.status_code, 204)
         response = self.app.getj('/get/person/1')
         self.assertEqual(response.status_code, 404)
