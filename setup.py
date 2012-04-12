@@ -25,6 +25,39 @@ if sys.version_info < (2, 6):
     requirements.append('simplejson')
 
 
+class run_tests(Command):
+    """Runs the test suite using the ``unittest2`` package instead of the
+    built-in ``unittest`` package.
+
+    This is necessary to override the default behavior of ``python setup.py
+    test``.
+
+    """
+    #: A brief description of the command.
+    description = "Run the test suite (using unittest2)."
+
+    #: Options which can be provided by the user.
+    user_options = []
+
+    def initialize_options(self):
+        """Intentionally unimplemented."""
+        pass
+
+    def finalize_options(self):
+        """Intentionally unimplemented."""
+        pass
+
+    def run(self):
+        """Runs :func:`unittest2.main`, which runs the full test suite using
+        ``unittest2`` instead of the built-in :mod:`unittest` module.
+
+        """
+        from unittest2 import main
+        # I don't know why this works. These arguments are undocumented.
+        return main(module='tests', defaultTest='suite',
+                    argv=['tests.__init__'])
+
+
 class run_coverage(Command):
     """Runs ``coverage``, the Python code coverage tool to generate a test
     coverage report.
@@ -83,7 +116,7 @@ setup(
         'Topic :: Internet :: WWW/HTTP',
         'Topic :: Software Development :: Libraries :: Python Modules'
     ],
-    cmdclass={'coverage': run_coverage},
+    cmdclass={'coverage': run_coverage, 'test': run_tests},
     description='A Flask extension for easy ReSTful API generation',
     download_url='http://pypi.python.org/pypi/Flask-Restless',
     install_requires=requirements,
