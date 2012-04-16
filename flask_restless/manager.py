@@ -1,22 +1,3 @@
-# -*- coding: utf-8; Mode: Python -*-
-#
-# Copyright (C) 2011 Lincoln de Sousa <lincoln@comum.org>
-# Copyright 2012 Jeffrey Finkelstein <jeffrey.finkelstein@gmail.com>
-#
-# This file is part of Flask-Restless.
-#
-# Flask-Restless is free software: you can redistribute it and/or modify it
-# under the terms of the GNU Affero General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or (at your
-# option) any later version.
-#
-# Flask-Restless is distributed in the hope that it will be useful, but WITHOUT
-# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-# FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
-# details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with Flask-Restless. If not, see <http://www.gnu.org/licenses/>.
 """
     flask.ext.restless.manager
     ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -27,7 +8,7 @@
 
     :copyright:2011 by Lincoln de Sousa <lincoln@comum.org>
     :copyright:2012 Jeffrey Finkelstein <jeffrey.finkelstein@gmail.com>
-    :license: GNU AGPLv3, see COPYING for more details
+    :license: GNU AGPLv3+ or BSD
 
 """
 
@@ -48,7 +29,6 @@ class IllegalArgumentError(Exception):
     pass
 
 
-# TODO use __tablename__ instead of uppercase class name?
 class APIManager(object):
     """Provides a method for creating a public ReSTful JSOn API with respect to
     a given :class:`~flask.Flask` application object.
@@ -76,36 +56,51 @@ class APIManager(object):
     #:    has been registered.
     BLUEPRINTNAME_FORMAT = '%s%s'
 
-    def __init__(self, app=None, flask_sqlalchemy_db=None):
+    def __init__(self, app=None, session=None, flask_sqlalchemy_db=None):
         """Stores the specified :class:`flask.Flask` application object on
-        which API endpoints will be registered and the
-        :class:`flask.ext.sqlalchemy.SQLAlchemy` object which contains the
-        models which will be exposed.
+        which API endpoints will be registered.
 
-        If either `app` or `flask_sqlalchemy_db` is ``None``, the user must
-        call the :meth:`init_app` method before calling the :meth:`create_api`
-        method.
+        If `app` is ``None`` or one of `session` and `flask_sqlalchemy_db_` is
+        ``None``, the user must call the :meth:`init_app` method before calling
+        the :meth:`create_api` method.
 
         `app` is the :class:`flask.Flask` object containing the user's Flask
         application.
+
+        `session` is the :class:`session.orm.session.Session` object in which
+        changes to the database will be made.
 
         `flask_sqlalchemy_db` is the :class:`flask.ext.sqlalchemy.SQLAlchemy`
         object with which `app` has been registered and which contains the
         database models for which API endpoints will be created.
 
-        For example::
+        If `flask_sqlalchemy_db` is not ``None``, `session` will be ignored.
 
-            import flask
-            import flask.ext.restless
-            import flask.ext.sqlalchemy
+        For example, to use this class with models defined in pure SQLAlchemy::
 
-            app = flask.Flask(__name__)
-            db = flask.ext.sqlalchemy.SQLALchemy(app)
-            apimanager = flask.ext.restless.APIManager(app, db)
+            from flask import Flask
+            from flask.ext.restless import APIManager
+            from sqlalchemy import create_engine
+            from sqlalchemy.orm.session import sessionmaker
+
+            engine = create_engine('sqlite:////tmp/mydb.sqlite')
+            Session = sessionmaker(bind=engine)
+            mysession = Session()
+            app = Flask(__name__)
+            apimanager = APIManager(app, session=mysession)
+
+        and with models defined with Flask-SQLAlchemy::
+
+            from flask import Flask
+            from flask.ext.restless import APIManager
+            from flask.ext.sqlalchemy import SQLAlchemy
+
+            app = Flask(__name__)
+            db = SQLALchemy(app)
+            apimanager = APIManager(app, flask_sqlalchemy_db=db)
 
         """
-        self.app = app
-        self.db = flask_sqlalchemy_db
+        self.init_app(app, session, flask_sqlalchemy_db)
 
     def _next_blueprint_name(self, basename):
         """Returns the next name for a blueprint with the specified base name.
@@ -134,31 +129,59 @@ class APIManager(object):
             next_number = max(existing_numbers) + 1
         return APIManager.BLUEPRINTNAME_FORMAT % (basename, next_number)
 
-    def init_app(self, app, flask_sqlalchemy_db):
+    def init_app(self, app, session=None, flask_sqlalchemy_db=None):
         """Stores the specified :class:`flask.Flask` application object on
         which API endpoints will be registered and the
-        :class:`flask.ext.sqlalchemy.SQLAlchemy` object which contains the
-        models which will be exposed.
+        :class:`sqlalchemy.orm.session.Session` object in which all database
+        changes will be made.
+
+        `session` is the :class:`session.orm.session.Session` object in which
+        changes to the database will be made.
+
+        `flask_sqlalchemy_db` is the :class:`flask.ext.sqlalchemy.SQLAlchemy`
+        object with which `app` has been registered and which contains the
+        database models for which API endpoints will be created.
+
+        If `flask_sqlalchemy_db` is not ``None``, `session` will be ignored.
 
         This is for use in the situation in which this class must be
         instantiated before the :class:`~flask.Flask` application has been
-        created. For example::
+        created.
 
-            import flask
-            import flask.ext.restless
-            import flask.ext.sqlalchemy
+        To use this method with pure SQLAlchemy, for example::
 
-            apimanager = flask.ext.restless.APIManager()
+            from flask import Flask
+            from flask.ext.restless import APIManager
+            from sqlalchemy import create_engine
+            from sqlalchemy.orm.session import sessionmaker
+
+            apimanager = APIManager()
 
             # later...
 
-            app = flask.Flask(__name__)
-            db = flask.ext.sqlalchemy.SQLALchemy(app)
-            apimanager.init_app(app, db)
+            engine = create_engine('sqlite:////tmp/mydb.sqlite')
+            Session = sessionmaker(bind=engine)
+            mysession = Session()
+            app = Flask(__name__)
+            apimanager.init_app(app, session=mysession)
+
+        and with models defined with Flask-SQLAlchemy::
+
+            from flask import Flask
+            from flask.ext.restless import APIManager
+            from flask.ext.sqlalchemy import SQLAlchemy
+
+            apimanager = APIManager()
+
+            # later...
+
+            app = Flask(__name__)
+            db = SQLALchemy(app)
+            apimanager.init_app(app, flask_sqlalchemy_db=db)
 
         """
         self.app = app
-        self.db = flask_sqlalchemy_db
+        self.session = session or flask_sqlalchemy_db.session
 
     def create_api(self, model, methods=READONLY_METHODS, url_prefix='/api',
                    collection_name=None, allow_patch_many=False,
@@ -297,7 +320,7 @@ class APIManager(object):
         # the name of the API, for use in creating the view and the blueprint
         apiname = APIManager.APINAME_FORMAT % collection_name
         # the view function for the API for this model
-        api_view = API.as_view(apiname, self.db.session, model,
+        api_view = API.as_view(apiname, self.session, model,
                                authentication_required_for,
                                authentication_function, include_columns,
                                validation_exceptions)
@@ -322,7 +345,7 @@ class APIManager(object):
         # evaluating functions on all instances of the specified model
         if allow_functions:
             eval_api_name = apiname + 'eval'
-            eval_api_view = FunctionAPI.as_view(eval_api_name, self.db.session,
+            eval_api_view = FunctionAPI.as_view(eval_api_name, self.session,
                                                 model)
             eval_endpoint = '/eval' + collection_endpoint
             blueprint.add_url_rule(eval_endpoint, methods=['GET'],

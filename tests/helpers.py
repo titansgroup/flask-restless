@@ -1,40 +1,30 @@
-# -*- coding: utf-8; Mode: Python -*-
-#
-# Copyright 2012 Jeffrey Finkelstein <jeffrey.finkelstein@gmail.com>
-#
-# This file is part of Flask-Restless.
-#
-# Flask-Restless is free software: you can redistribute it and/or modify it
-# under the terms of the GNU Affero General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or (at your
-# option) any later version.
-#
-# Flask-Restless is distributed in the hope that it will be useful, but WITHOUT
-# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-# FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
-# details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with Flask-Restless. If not, see <http://www.gnu.org/licenses/>.
-"""Helper functions for unit tests in this package.
+"""
+    tests.helpers
+    ~~~~~~~~~~~~~
 
-New test classes should probably inherit from one of the existing ones
-here. These classes add ``getj``, ``postj``, etc. methods to the test client
-(available at ``self.app``) which for the content type of the requests to
-:mimetype:`application/json`. When writing new tests, use these so that you
-don't have to add ``content_type='application/json'`` every time you make a
-request.
+    Provides helper functions for unit tests in this package.
 
-New test modules whose test classes inherit from :class:`TestSupport` must
-import the :func:`setUpModule` and :func:`tearDownModule` functions, which
-create and destroy a file for a test database, respectively, from this module::
+    New test classes should probably inherit from one of the existing ones
+    here. These classes add ``getj``, ``postj``, etc. methods to the test
+    client (available at ``self.app``) which for the content type of the
+    requests to :mimetype:`application/json`. When writing new tests, use these
+    so that you don't have to add ``content_type='application/json'`` every
+    time you make a request.
 
-    from .helpers import setUpModule
-    from .helpers import tearDownModule
+    New test modules whose test classes inherit from :class:`TestSupport` must
+    import the :func:`setUpModule` and :func:`tearDownModule` functions, which
+    create and destroy a file for a test database, respectively, from this
+    module::
 
-This makes :mod:`unittest` execute these functions once per test module, which
-saves some disk usage and should theoretically cause the tests to run more
-quickly.
+        from .helpers import setUpModule
+        from .helpers import tearDownModule
+
+    This makes :mod:`unittest` execute these functions once per test module,
+    which saves some disk usage and should theoretically cause the tests to run
+    more quickly.
+
+    :copyright: 2012 Jeffrey Finkelstein <jeffrey.finkelstein@gmail.com>
+    :license: GNU AGPLv3+ or BSD
 
 """
 import datetime
@@ -43,7 +33,19 @@ import tempfile
 from unittest2 import TestCase
 
 from flask import Flask
-from flask.ext.sqlalchemy import SQLAlchemy
+from sqlalchemy import Column
+from sqlalchemy import create_engine
+from sqlalchemy import Date
+from sqlalchemy import DateTime
+from sqlalchemy import Float
+from sqlalchemy import ForeignKey
+from sqlalchemy import Integer
+from sqlalchemy import Unicode
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import backref
+from sqlalchemy.orm import relationship
+from sqlalchemy.orm import scoped_session
+from sqlalchemy.orm import sessionmaker
 
 from flask.ext.restless import APIManager
 
@@ -99,7 +101,26 @@ def add_json_methods(client):
     client.deletej = deletej
 
 
-class TestSupport(TestCase):
+class FlaskTestBase(TestCase):
+    """Base class for tests which use a Flask application."""
+
+    def setUp(self):
+        """Creates the Flask application and the APIManager."""
+        super(FlaskTestBase, self).setUp()
+
+        # create the Flask application
+        app = Flask(__name__)
+        app.config['DEBUG'] = True
+        app.config['TESTING'] = True
+        app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///%s' % DB['filename']
+        self.flaskapp = app
+
+        # create the test client
+        self.app = app.test_client()
+        add_json_methods(self.app)
+
+
+class TestSupport(FlaskTestBase):
     """Base class for tests which use a database and have an
     :class:`flask_restless.APIManager` with a :class:`flask.Flask` app object.
 
@@ -111,50 +132,48 @@ class TestSupport(TestCase):
 
     def setUp(self):
         """Creates the Flask application and the APIManager."""
-        # create the Flask application
-        app = Flask(__name__)
-        app.config['DEBUG'] = True
-        app.config['TESTING'] = True
-        app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///%s' % DB['filename']
-        self.flaskapp = app
+        super(TestSupport, self).setUp()
 
-        # initialize Flask-SQLAlchemy and Flask-Restless
-        self.db = SQLAlchemy(app)
-        self.manager = APIManager(app, self.db)
-
-        # for the sake of brevity...
-        db = self.db
+        # initialize SQLAlchemy and Flask-Restless
+        app = self.flaskapp
+        engine = create_engine(app.config['SQLALCHEMY_DATABASE_URI'],
+                               convert_unicode=True)
+        self.session = scoped_session(sessionmaker(autocommit=False,
+                                                   autoflush=False,
+                                                   bind=engine))
+        self.Base = declarative_base()
+        self.Base.metadata.bind = engine
+        #Base.query = self.session.query_property()
+        self.manager = APIManager(app, self.session)
 
         # declare the models
-        class Computer(db.Model):
-            id = db.Column(db.Integer, primary_key=True)
-            name = db.Column(db.Unicode, unique=True)
-            vendor = db.Column(db.Unicode)
-            buy_date = db.Column(db.DateTime)
-            owner_id = db.Column(db.Integer, db.ForeignKey('person.id'))
+        class Computer(self.Base):
+            __tablename__ = 'computer'
+            id = Column(Integer, primary_key=True)
+            name = Column(Unicode, unique=True)
+            vendor = Column(Unicode)
+            buy_date = Column(DateTime)
+            owner_id = Column(Integer, ForeignKey('person.id'))
 
-        class Person(db.Model):
-            id = db.Column(db.Integer, primary_key=True)
-            name = db.Column(db.Unicode, unique=True)
-            age = db.Column(db.Float)
-            other = db.Column(db.Float)
-            birth_date = db.Column(db.Date)
-            computers = db.relationship('Computer',
-                                        backref=db.backref('owner',
-                                                           lazy='dynamic'))
+        class Person(self.Base):
+            __tablename__ = 'person'
+            id = Column(Integer, primary_key=True)
+            name = Column(Unicode, unique=True)
+            age = Column(Float)
+            other = Column(Float)
+            birth_date = Column(Date)
+            computers = relationship('Computer',
+                                     backref=backref('owner', lazy='dynamic'))
         self.Person = Person
         self.Computer = Computer
 
         # create all the tables required for the models
-        self.db.create_all()
-
-        # create the test client
-        self.app = app.test_client()
-        add_json_methods(self.app)
+        self.Base.metadata.create_all()
 
     def tearDown(self):
         """Drops all tables from the temporary database."""
-        self.db.drop_all()
+        #self.session.remove()
+        self.Base.metadata.drop_all()
 
 
 class TestSupportPrefilled(TestSupport):
@@ -182,5 +201,5 @@ class TestSupportPrefilled(TestSupport):
         katy = self.Person(name=u'Katy', age=7, other=10)
         john = self.Person(name=u'John', age=28, other=10)
         self.people = [lincoln, mary, lucy, katy, john]
-        self.db.session.add_all(self.people)
-        self.db.session.commit()
+        self.session.add_all(self.people)
+        self.session.commit()

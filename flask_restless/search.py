@@ -1,22 +1,3 @@
-# -*- coding: utf-8; Mode: Python -*-
-#
-# Copyright (C) 2011 Lincoln de Sousa <lincoln@comum.org>
-# Copyright 2012 Jeffrey Finkelstein <jeffrey.finkelstein@gmail.com>
-#
-# This file is part of Flask-Restless.
-#
-# Flask-Restless is free software: you can redistribute it and/or modify it
-# under the terms of the GNU Affero General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or (at your
-# option) any later version.
-#
-# Flask-Restless is distributed in the hope that it will be useful, but WITHOUT
-# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-# FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
-# details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with Flask-Restless. If not, see <http://www.gnu.org/licenses/>.
 """
     flask.ext.restless.search
     ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -27,12 +8,14 @@
     and :func:`search` functions, which create a SQLAlchemy query object and
     execute that query on a given model, respectively.
 
-    :copyright:2011 by Lincoln de Sousa <lincoln@comum.org>
-    :copyright:2012 Jeffrey Finkelstein <jeffrey.finkelstein@gmail.com>
-    :license: GNU AGPLv3, see COPYING for more details
+    :copyright: 2011 by Lincoln de Sousa <lincoln@comum.org>
+    :copyright: 2012 Jeffrey Finkelstein <jeffrey.finkelstein@gmail.com>
+    :license: GNU AGPLv3+ or BSD
 
 """
 import inspect
+
+from .helpers import unicode_keys_to_strings
 
 #: The mapping from operator name (as accepted by the search method) to a
 #: function which returns the SQLAlchemy expression corresponding to that
@@ -82,14 +65,6 @@ OPERATORS = {
     'has': lambda f, a, fn: f.has(**{str(fn): a}),
     'any': lambda f, a, fn: f.any(**{str(fn): a})
 }
-
-
-def _unicode_keys_to_strings(dictionary):
-    """Returns a new dictionary with the same mappings as `dictionary`, but
-    with each of the keys coerced to a string (by calling :func:`str(key)`).
-
-    """
-    return dict((str(k), v) for k, v in dictionary.iteritems())
 
 
 class OrderBy(object):
@@ -245,7 +220,7 @@ class SearchParameters(object):
         filters = [from_dict(f) for f in dictionary.get('filters', [])]
         # HACK In Python 2.5, unicode dictionary keys are not allowed.
         order_by_list = dictionary.get('order_by', [])
-        order_by_list = (_unicode_keys_to_strings(o) for o in order_by_list)
+        order_by_list = (unicode_keys_to_strings(o) for o in order_by_list)
         order_by = [OrderBy(**o) for o in order_by_list]
         limit = dictionary.get('limit')
         offset = dictionary.get('offset')

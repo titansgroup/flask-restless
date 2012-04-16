@@ -1,43 +1,37 @@
-# -*- coding: utf-8; Mode: Python -*-
-#
-# Copyright 2012 Jeffrey Finkelstein <jefrey.finkelstein@gmail.com>
-#
-# This file is part of Flask-Restless.
-#
-# Flask-Restless is free software: you can redistribute it and/or modify it
-# under the terms of the GNU Affero General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or (at your
-# option) any later version.
-#
-# Flask-Restless is distributed in the hope that it will be useful, but WITHOUT
-# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-# FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
-# details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with Flask-Restless. If not, see <http://www.gnu.org/licenses/>.
-"""Unit tests for SQLAlchemy models which have some validation functionality
-and therefore raise validation errors when requests are made to write to the
-database.
+"""
+    tests.test_validation
+    ~~~~~~~~~~~~~~~~~~~~~
 
-Validation is not provided by Flask-Restless itself, but it must capture
-validation errors and return them to the client.
+    Provides unit tests for SQLAlchemy models which have some validation
+    functionality and therefore raise validation errors when requests are made
+    to write to the database.
+
+    Validation is not provided by Flask-Restless itself, but it must capture
+    validation errors and return them to the client.
+
+    :copyright: 2012 Jeffrey Finkelstein <jeffrey.finkelstein@gmail.com>
+    :license: GNU AGPLv3+ or BSD
 
 """
 import re
 
+from flask import json
+from sqlalchemy import Column
+from sqlalchemy import Integer
+from sqlalchemy import Unicode
+from sqlalchemy.orm import validates
 from unittest2 import TestSuite
 from unittest2 import skipUnless
-
-from flask import json
 
 # for SAValidation package on pypi.python.org
 try:
     import savalidation as _sav
     import savalidation.validators as sav
-    has_savalidation = True
 except:
     has_savalidation = False
+else:
+    sav_version = tuple(int(n) for n in _sav.VERSION.split('.'))
+    has_savalidation = True
 
 from .helpers import setUpModule
 from .helpers import tearDownModule
@@ -66,22 +60,20 @@ class SimpleValidationTest(TestSupport):
     def setUp(self):
         """Create APIs for the validated models."""
         super(SimpleValidationTest, self).setUp()
-        # for the sake of brevity...
-        db = self.db
 
         class CoolValidationError(Exception):
             pass
 
         # create the validated class
-        # NOTE: don't name this `Person`, as in models.Person
-        class Test(db.Model):
+        # NOTE: don't name this `Person`, as in self.Person
+        class Test(self.Base):
             __tablename__ = 'test'
-            id = db.Column(db.Integer, primary_key=True)
-            name = db.Column(db.Unicode(30), nullable=False, index=True)
-            email = db.Column(db.Unicode, nullable=False)
-            age = db.Column(db.Integer, nullable=False)
+            id = Column(Integer, primary_key=True)
+            name = Column(Unicode(30), nullable=False, index=True)
+            email = Column(Unicode, nullable=False)
+            age = Column(Integer, nullable=False)
 
-            @db.validates('email')
+            @validates('email')
             def validate_email(self, key, string):
                 if len(EMAIL_REGEX.findall(string)) != 1:
                     exception = CoolValidationError()
@@ -90,7 +82,7 @@ class SimpleValidationTest(TestSupport):
                     raise exception
                 return string
 
-            @db.validates('age')
+            @validates('age')
             def validate_age(self, key, number):
                 if not 0 <= number <= 150:
                     exception = CoolValidationError()
@@ -98,14 +90,14 @@ class SimpleValidationTest(TestSupport):
                     raise exception
                 return number
 
-            @db.validates('name')
+            @validates('name')
             def validate_name(self, key, string):
                 if string is None:
                     exception = CoolValidationError()
                     exception.errors = dict(name='Must not be empty')
                     raise exception
                 return string
-        db.create_all()
+        self.Base.metadata.create_all()
         self.manager.create_api(Test, methods=['GET', 'POST', 'PATCH'],
                                 validation_exceptions=[CoolValidationError])
 
@@ -156,20 +148,18 @@ class SAVTest(TestSupport):
     def setUp(self):
         """Create APIs for the validated models."""
         super(SAVTest, self).setUp()
-        # for the sake of brevity...
-        db = self.db
 
-        class Test(db.Model, _sav.ValidationMixin):
+        class Test(self.Base, _sav.ValidationMixin):
             __tablename__ = 'test'
-            id = db.Column(db.Integer, primary_key=True)
-            name = db.Column(db.Unicode(30))
-            email = db.Column(db.Unicode)
-            age = db.Column(db.Integer)
+            id = Column(Integer, primary_key=True)
+            name = Column(Unicode(30))
+            email = Column(Unicode)
+            age = Column(Integer)
 
             sav.validates_presence_of('name', 'email')
             sav.validates_email('email')
 
-        db.create_all()
+        self.Base.metadata.create_all()
 
         exceptions = [_sav.ValidationError]
         self.manager.create_api(Test, methods=['GET', 'POST', 'PATCH'],
@@ -256,7 +246,8 @@ class SAVTest(TestSupport):
 
 # skipUnless should be used as a decorator, but Python 2.5 doesn't have
 # decorators.
-SAVTest = skipUnless(has_savalidation, 'savalidation not found.')(SAVTest)
+SAVTest = skipUnless(has_savalidation and sav_version >= (0, 2),
+                     'savalidation not found.')(SAVTest)
 
 
 def load_tests(loader, standard_tests, pattern):

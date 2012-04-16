@@ -1,22 +1,3 @@
-# -*- coding: utf-8; Mode: Python -*-
-#
-# Copyright (C) 2011 Lincoln de Sousa <lincoln@comum.org>
-# Copyright 2012 Jeffrey Finkelstein <jeffrey.finkelstein@gmail.com>
-#
-# This file is part of Flask-Restless.
-#
-# Flask-Restless is free software: you can redistribute it and/or modify it
-# under the terms of the GNU Affero General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or (at your
-# option) any later version.
-#
-# Flask-Restless is distributed in the hope that it will be useful, but WITHOUT
-# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-# FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
-# details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with Flask-Restless. If not, see <http://www.gnu.org/licenses/>.
 """
     flask.ext.restless.views
     ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -35,9 +16,9 @@
       Provides a :http:method:`get` endpoint which returns the result of
       evaluating some function on the entire collection of a given model.
 
-    :copyright:2011 by Lincoln de Sousa <lincoln@comum.org>
-    :copyright:2012 Jeffrey Finkelstein <jeffrey.finkelstein@gmail.com>
-    :license: GNU AGPLv3, see COPYING for more details
+    :copyright: 2011 by Lincoln de Sousa <lincoln@comum.org>
+    :copyright: 2012 Jeffrey Finkelstein <jeffrey.finkelstein@gmail.com>
+    :license: GNU AGPLv3+ or BSD
 
 """
 import datetime
@@ -60,6 +41,7 @@ from sqlalchemy.orm.properties import RelationshipProperty as RelProperty
 from sqlalchemy.sql import func
 from werkzeug.exceptions import BadRequest
 
+from .helpers import unicode_keys_to_strings
 from .search import create_query
 from .search import search
 
@@ -111,7 +93,7 @@ def _get_or_create(session, model, **kwargs):
 
     """
     # TODO document that this uses the .first() function
-    instance = model.query.filter_by(**kwargs).first()
+    instance = session.query(model).filter_by(**kwargs).first()
     if instance:
         return instance, False
     else:
@@ -315,6 +297,11 @@ class ModelView(MethodView):
     performed when dealing with this model can be accessed from the
     :attr:`session` attribute.
 
+    When subclasses wish to make queries to the database model specified in the
+    constructor, they should access the ``self.query`` function, which
+    delegates to the appropriate SQLAlchemy query object or Flask-SQLAlchemy
+    query object, depending on how the model has been defined.
+
     """
 
     #: Applies the :func:`require_json_content_type` decorator to each of the
@@ -335,6 +322,19 @@ class ModelView(MethodView):
         super(ModelView, self).__init__(*args, **kw)
         self.session = session
         self.model = model
+
+    def query(self, model=None):
+        """Returns either a SQLAlchemy query or Flask-SQLAlchemy query object
+        (depending on the type of the model) on the specified `model`, or if
+        `model` is ``None``, the model specified in the constructor of this
+        class.
+
+        """
+        the_model = model or self.model
+        if hasattr(the_model, 'query'):
+            return the_model.query
+        else:
+            return self.session.query(the_model)
 
 
 class FunctionAPI(ModelView):
@@ -464,10 +464,11 @@ class API(ModelView):
         submodel = _get_related_model(self.model, relationname)
         for dictionary in toadd or []:
             if 'id' in dictionary:
-                subinst = submodel.query.get(dictionary['id'])
+                filtered = self.query(submodel).filter_by(id=dictionary['id'])
+                subinst = filtered.first()
             else:
-                subinst = _get_or_create(self.session, submodel,
-                                         **dictionary)[0]
+                kw = unicode_keys_to_strings(dictionary)
+                subinst = _get_or_create(self.session, submodel, **kw)[0]
             for instance in query:
                 getattr(instance, relationname).append(subinst)
 
@@ -499,10 +500,12 @@ class API(ModelView):
         for dictionary in toremove or []:
             remove = dictionary.pop('__delete__', False)
             if 'id' in dictionary:
-                subinst = submodel.query.get(dictionary['id'])
+                filtered = self.query(submodel).filter_by(id=dictionary['id'])
+                subinst = filtered.first()
             else:
+                kw = unicode_keys_to_strings(dictionary)
                 # TODO document that we use .first() here
-                subinst = submodel.query.filter_by(**dictionary).first()
+                subinst = self.query(submodel).filter_by(**kw).first()
             for instance in query:
                 getattr(instance, relationname).remove(subinst)
             if remove:
@@ -746,7 +749,7 @@ class API(ModelView):
         self._check_authentication()
         if instid is None:
             return self._search()
-        inst = self.model.query.get(instid)
+        inst = self.query().filter_by(id=instid).first()
         if inst is None:
             abort(404)
         relations = _get_relations(self.model)
@@ -764,7 +767,7 @@ class API(ModelView):
 
         """
         self._check_authentication()
-        inst = self.model.query.get(instid)
+        inst = self.query().filter_by(id=instid).first()
         if inst is not None:
             self.session.delete(inst)
             self.session.commit()
@@ -810,15 +813,17 @@ class API(ModelView):
         params = self._strings_to_dates(params)
 
         try:
-            # Instantiate the model with the parameters
-            instance = self.model(**dict([(i, params[i]) for i in props]))
+            # Instantiate the model with the parameters.
+            modelargs = dict([(i, params[i]) for i in props])
+            # HACK Python 2.5 requires __init__() keywords to be strings.
+            instance = self.model(**unicode_keys_to_strings(modelargs))
 
             # Handling relations, a single level is allowed
             for col in set(relations).intersection(paramkeys):
                 submodel = cols[col].property.mapper.class_
                 for subparams in params[col]:
-                    subinst = _get_or_create(self.session, submodel,
-                                             **subparams)[0]
+                    kw = unicode_keys_to_strings(subparams)
+                    subinst = _get_or_create(self.session, submodel, **kw)[0]
                     getattr(instance, col).append(subinst)
 
             # add the created model to the session
@@ -864,7 +869,7 @@ class API(ModelView):
                                            message='Unable to construct query')
         else:
             # create a SQLAlchemy Query which has exactly the specified row
-            query = self.session.query(self.model).filter_by(id=instid)
+            query = self.query().filter_by(id=instid)
             assert query.count() == 1, 'Multiple rows with same ID'
 
         relations = self._update_relations(query, data)

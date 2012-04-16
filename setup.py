@@ -1,30 +1,11 @@
-# -*- coding: utf-8; Mode: Python -*-
-#
-# Copyright (C) 2011 Lincoln de Sousa <lincoln@comum.org>
-# Copyright 2012 Jeffrey Finkelstein <jeffrey.finkelstein@gmail.com>
-#
-# This file is part of Flask-Restless.
-#
-# Flask-Restless is free software: you can redistribute it and/or modify it
-# under the terms of the GNU Affero General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or (at your
-# option) any later version.
-#
-# Flask-Restless is distributed in the hope that it will be useful, but WITHOUT
-# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-# FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
-# details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with Flask-Restless. If not, see <http://www.gnu.org/licenses/>.
 """
     Flask-Restless
     ~~~~~~~~~~~~~~
 
     Flask-Restless is a `Flask <http://flask.pocoo.org>`_ extension which
     facilitates the creation of ReSTful JSON APIs. It is compatible with models
-    which have been defined using `FLask-SQLAlchemy
-    <http://packages.python.org/Flask-SQLAlchemy>`_.
+    which have been defined using `SQLAlchemy <http://sqlalchemy.org>`_ or
+    `FLask-SQLAlchemy <http://packages.python.org/Flask-SQLAlchemy>`_.
 
     For more information, check the World Wide Web!
 
@@ -33,15 +14,14 @@
       * `Source code repository <http://github.com/jfinkels/flask-restless>`_
 
 """
-from __future__ import with_statement
-
 import sys
 from setuptools import Command
 from setuptools import setup
 
 #: The installation requirements for Flask-Restless. ``simplejson`` is only
-#: required on Python version 2.5.
-requirements = ['flask>=0.7', 'flask-sqlalchemy', 'python-dateutil<2.0']
+#: required on Python version 2.5. ``Flask-SQLAlchemy`` is not required, so the
+#: user must install it explicitly.
+requirements = ['flask>=0.7', 'sqlalchemy', 'python-dateutil<2.0']
 if sys.version_info < (2, 6):
     requirements.append('simplejson')
 
@@ -96,7 +76,8 @@ setup(
         'Development Status :: 4 - Beta',
         'Environment :: Web Environment',
         'Intended Audience :: Developers',
-        'License :: OSI Approved :: GNU Affero General Public License v3',
+        'License :: OSI Approved :: BSD License',
+        'License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)',
         'Operating System :: OS Independent',
         'Programming Language :: Python',
         'Topic :: Database :: Front-Ends',
@@ -109,7 +90,7 @@ setup(
     install_requires=requirements,
     include_package_data=True,
     keywords=['ReST', 'API', 'Flask', 'Elixir'],
-    license='GNU AGPLv3+',
+    license='GNU AGPLv3+ or BSD',
     long_description=__doc__,
     name='Flask-Restless',
     platforms='any',
@@ -117,6 +98,6 @@ setup(
     test_suite='tests.suite',
     tests_require=['unittest2'],
     url='http://github.com/jfinkels/flask-restless',
-    version='0.5-dev',
+    version='0.6-dev',
     zip_safe=False
 )
