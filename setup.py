@@ -4,8 +4,9 @@
 
     Flask-Restless is a `Flask <http://flask.pocoo.org>`_ extension which
     facilitates the creation of ReSTful JSON APIs. It is compatible with models
-    which have been defined using `SQLAlchemy <http://sqlalchemy.org>`_ or
-    `FLask-SQLAlchemy <http://packages.python.org/Flask-SQLAlchemy>`_.
+    which have been defined using `SQLAlchemy <http://sqlalchemy.org>`_,
+    `FLask-SQLAlchemy <http://packages.python.org/Flask-SQLAlchemy>`_, or
+    `Elixir <http://elixir.ematia.de>`_.
 
     For more information, check the World Wide Web!
 
@@ -18,9 +19,13 @@ import sys
 from setuptools import Command
 from setuptools import setup
 
-#: The installation requirements for Flask-Restless. ``simplejson`` is only
-#: required on Python version 2.5. ``Flask-SQLAlchemy`` is not required, so the
-#: user must install it explicitly.
+#: The installation requirements for Flask-Restless.
+#:
+#: Note:
+#:
+#: - ``simplejson`` is only required on Python version 2.5.
+#: - ``Flask-SQLAlchemy`` is optional, so the user must install it explicitly.
+#: - ``Elixir`` is optional, so the user must install it explicitly.
 requirements = ['flask>=0.7', 'sqlalchemy', 'python-dateutil<2.0']
 if sys.version_info < (2, 6):
     requirements.append('simplejson')

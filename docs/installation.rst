@@ -20,6 +20,8 @@ installed if you use ``pip``):
 * `Flask-SQLAlchemy <http://packages.python.org/Flask-SQLAlchemy>`_, *only if*
   you want to define your models using Flask-SQLAlchemy (which we highly
   recommend)
+* `Elixir <http://elixir.ematia.de>`_, *only if* you want to define your models
+  using Elixir
 
 Flask-Restless requires Python version 2.5, 2.6 or 2.7. Python 3 support will
 come when Flask has it.

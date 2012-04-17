@@ -21,6 +21,24 @@ except:
     has_flask_sqlalchemy = False
 else:
     has_flask_sqlalchemy = True
+try:
+    from elixir import create_all
+    from elixir import Date
+    from elixir import DateTime
+    from elixir import drop_all
+    from elixir import Entity
+    from elixir import Field
+    from elixir import Float
+    from elixir import ManyToOne
+    from elixir import metadata
+    from elixir import OneToMany
+    from elixir import session
+    from elixir import setup_all
+    from elixir import Unicode
+except:
+    has_elixir = False
+else:
+    has_elixir = True
 
 from flask.ext.restless import APIManager
 from flask.ext.restless.views import _get_columns
@@ -31,7 +49,7 @@ from .helpers import tearDownModule
 from .helpers import TestSupport
 
 
-__all__ = ['APIManagerTest']
+__all__ = ['APIManagerTest', 'FSATest', 'ElixirTest']
 
 
 dumps = json.dumps
@@ -364,15 +382,93 @@ class FSATest(FlaskTestBase):
         self.assertEqual(loads(response.data)['objects'][0]['name'], 'bar')
 
 
+class ElixirTest(FlaskTestBase):
+    """Tests which use models defined using Elixir instead of pure SQLAlchemy.
+
+    """
+
+    def setUp(self):
+        """Creates the Flask application, the APIManager, the database, and the
+        Elixir models.
+
+        """
+        super(ElixirTest, self).setUp()
+
+        # initialize Elixir and Flask-Restless
+        metadata.bind = self.flaskapp.config['SQLALCHEMY_DATABASE_URI']
+        self.manager = APIManager(self.flaskapp, session=session)
+
+        # declare the models
+        class Computer(Entity):
+            name = Field(Unicode, unique=True)
+            vendor = Field(Unicode)
+            buy_date = Field(DateTime)
+            owner = ManyToOne('Person')
+
+        class Person(Entity):
+            name = Field(Unicode, unique=True)
+            age = Field(Float)
+            other = Field(Float)
+            birth_date = Field(Date)
+            computers = OneToMany('Computer')
+
+        self.Person = Person
+        self.Computer = Computer
+
+        # create all the tables required for the models
+        setup_all()
+        create_all()
+
+    def tearDown(self):
+        """Drops all tables from the temporary database."""
+        drop_all()
+
+    def test_elixir(self):
+        """Tests that :class:`flask.ext.restless.APIManager` correctly exposes
+        models defined using Elixir.
+
+        """
+        # create three different APIs for the same model
+        self.manager.create_api(self.Person, methods=['GET', 'POST'],
+                                collection_name='person')
+        self.manager.create_api(self.Person, methods=['PATCH'],
+                                url_prefix='/api2', collection_name='person')
+        self.manager.create_api(self.Person, methods=['GET'],
+                                url_prefix='/readonly',
+                                collection_name='person')
+
+        # test that specified endpoints exist
+        response = self.app.post('/api/person', data=dumps(dict(name='foo')))
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(loads(response.data)['id'], 1)
+        response = self.app.get('/api/person')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(loads(response.data)['objects']), 1)
+        self.assertEqual(loads(response.data)['objects'][0]['id'], 1)
+        response = self.app.patch('/api2/person/1',
+                                  data=dumps(dict(name='bar')))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(loads(response.data)['id'], 1)
+        self.assertEqual(loads(response.data)['name'], 'bar')
+
+        # test that the model is the same as before
+        response = self.app.get('/readonly/person')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(loads(response.data)['objects']), 1)
+        self.assertEqual(loads(response.data)['objects'][0]['id'], 1)
+        self.assertEqual(loads(response.data)['objects'][0]['name'], 'bar')
+
 # skipUnless should be used as a decorator, but Python 2.5 doesn't have
 # decorators.
 FSATest = skipUnless(has_flask_sqlalchemy,
                      'Flask-SQLAlchemy not found.')(FSATest)
+ElixirTest = skipUnless(has_elixir, 'Elixir not found.')(ElixirTest)
 
 
 def load_tests(loader, standard_tests, pattern):
     """Returns the test suite for this module."""
     suite = TestSuite()
     suite.addTest(loader.loadTestsFromTestCase(APIManagerTest))
+    suite.addTest(loader.loadTestsFromTestCase(ElixirTest))
     suite.addTest(loader.loadTestsFromTestCase(FSATest))
     return suite

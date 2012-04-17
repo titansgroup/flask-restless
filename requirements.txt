@@ -1,5 +1,6 @@
 flask>=0.7
 flask-sqlalchemy
+elixir
 sqlalchemy
 python-dateutil<2.0
 simplejson

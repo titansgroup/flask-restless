@@ -10,7 +10,7 @@ Requests and responses are all in JSON format, so the mimetype is
 mimetype and/or content type.
 
 Suppose we have the following Flask-SQLAlchemy models (the example works with
-pure SQLALchemy just the same)::
+SQLALchemy or Elixir with slight modifications)::
 
     from flask import Flask
     from flask.ext.sqlalchemy import SQLAlchemy

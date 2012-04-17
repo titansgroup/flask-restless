@@ -307,7 +307,13 @@ class APIManager(object):
                    ' authentication_function.')
             raise IllegalArgumentError(msg)
         if collection_name is None:
-            collection_name = model.__tablename__
+            if hasattr(model, '__tablename__'):
+                # for SQLAlchemy or Flask-SQLAlchemy
+                collection_name = model.__tablename__
+            else:
+                # for Elixir; note that this will include the module name as a
+                # prefix
+                collection_name = model.table.name
         # convert all method names to upper case
         methods = frozenset((m.upper() for m in methods))
         # sets of methods used for different types of endpoints

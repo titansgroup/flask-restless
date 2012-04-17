@@ -5,13 +5,14 @@
 Creating API endpoints
 ======================
 
-To use this extension, you must have defined your database models using either
-SQLAlchemy or Flask-SQLALchemy.
+To use this extension, you must have defined your database models using
+SQLAlchemy, Flask-SQLALchemy, or Elixir. In this section we will show the basic
+usage for Flask-SQLAlchemy, but using SQLAlchemy or Elixir requires only minor
+changes.
 
-The basic setup for Flask-SQLAlchemy is the same. First, create your
-:class:`flask.Flask` object, :class:`flask.ext.sqlalchemy.SQLAlchemy` object,
-and model classes as usual but with the following two (reasonable) restrictions
-on models:
+First, create your :class:`flask.Flask` object,
+:class:`flask.ext.sqlalchemy.SQLAlchemy` object, and model classes as usual but
+with the following two (reasonable) restrictions on models:
 
 1. They must have an ``id`` column of type :class:`sqlalchemy.Integer`.
 2. They must have an ``__init__`` method which accepts keyword arguments for
