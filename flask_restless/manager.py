@@ -13,6 +13,7 @@
 """
 
 from flask import Blueprint
+from sqlalchemy.orm import scoped_session
 
 from .views import API
 from .views import FunctionAPI
@@ -68,7 +69,9 @@ class APIManager(object):
         application.
 
         `session` is the :class:`session.orm.session.Session` object in which
-        changes to the database will be made.
+        changes to the database will be made. It may also be a
+        :class:`session.orm.session.Session` class, in which case a new
+        :class:`sqlalchemy.orm.scoped_session` will be created from it.
 
         `flask_sqlalchemy_db` is the :class:`flask.ext.sqlalchemy.SQLAlchemy`
         object with which `app` has been registered and which contains the
@@ -182,15 +185,17 @@ class APIManager(object):
         """
         self.app = app
         self.session = session or flask_sqlalchemy_db.session
+        if isinstance(self.session, type):
+            self.session = scoped_session(self.session)
 
-    def create_api(self, model, methods=READONLY_METHODS, url_prefix='/api',
-                   collection_name=None, allow_patch_many=False,
-                   allow_functions=False, authentication_required_for=None,
-                   authentication_function=None, include_columns=None,
-                   validation_exceptions=None):
-        """Creates a ReSTful API interface as a blueprint and registers it on
-        the :class:`flask.Flask` application specified in the constructor to
-        this class.
+    def create_api_blueprint(self, model, methods=READONLY_METHODS,
+                             url_prefix='/api', collection_name=None,
+                             allow_patch_many=False, allow_functions=False,
+                             authentication_required_for=None,
+                             authentication_function=None,
+                             include_columns=None, validation_exceptions=None):
+        """Creates an returns a ReSTful API interface as a blueprint, but does
+        not register it on any :class:`flask.Flask` application.
 
         The endpoints for the API for ``model`` will be available at
         ``<url_prefix>/<collection_name>``. If `collection_name` is ``None``,
@@ -272,6 +277,10 @@ class APIManager(object):
         columns will be included. If this list includes a string which does not
         name a column in `model`, it will be ignored.
 
+        .. versionadded:: 0.6
+           This functionality was formerly in :meth:`create_api`, but the
+           blueprint creation and registration have now been separated.
+
         .. versionadded:: 0.5
            Added the `include_columns` keyword argument.
 
@@ -350,6 +359,25 @@ class APIManager(object):
             eval_endpoint = '/eval' + collection_endpoint
             blueprint.add_url_rule(eval_endpoint, methods=['GET'],
                                    view_func=eval_api_view)
-        # register the blueprint on the app
-        self.app.register_blueprint(blueprint)
         return blueprint
+
+    def create_api(self, *args, **kw):
+        """Creates and registers a ReSTful API blueprint on the
+        :class:`flask.Flask` application specified in the constructor of this
+        class.
+
+        The positional and keyword arguments are passed directly to the
+        :meth:`create_api_blueprint` method, so see the documentation there.
+
+        This is a convenience method for the following code::
+
+            blueprint = apimanager.create_api_blueprint(*args, **kw)
+            app.register_blueprint(blueprint)
+
+        .. versionchanged:: 0.6
+           The blueprint creation has been moved to
+           :meth:`create_api_blueprint`; the registration remains here.
+
+        """
+        blueprint = self.create_api_blueprint(*args, **kw)
+        self.app.register_blueprint(blueprint)
