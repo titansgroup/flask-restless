@@ -15,6 +15,7 @@
 from flask import Blueprint
 from sqlalchemy.orm import scoped_session
 
+from .helpers import infer_backend
 from .views import API
 from .views import FunctionAPI
 
@@ -22,32 +23,22 @@ from .views import FunctionAPI
 READONLY_METHODS = frozenset(('GET', ))
 
 
-def _infer_backend(model):
-    """Returns a string identifying the backend (a database abstraction layer
-    like SQLAlchemy, Flask-SQLAlchemy, or Elixir) for which `model` has been
-    defined.
+def _collection_name_from_model(model):
+    """Returns a string representing the collection name for the specified
+    model to be used in naming API endpoints for the model.
 
-    This function returns one of ``'sqlalchemy'``, ``'flask-sqlalchemy'``, and
-    ``'elixir'``, or ``None`` if the backend could not be inferred. Note that
-    this function is relatively dumb, and simply checks for the presence of
-    attributes on the model which signify that it was defined using one of the
-    above backends.
-
-    This function should correctly infer the backend regardless of whether the
-    concrete tables have been created (or destroyed); that is, this works
-    before your tables are created, after they are created, and after they have
-    been destroyed.
-
-    .. versionadded:: 0.6
+    If the type of database abstraction layer used to define `model` cannot be
+    inferred, :exc:`TypeError` will be raised.
 
     """
-    if hasattr(model, 'table'):
-        return 'elixir'
-    if hasattr(model, 'query') and hasattr(model, 'query_class'):
-        return 'flask-sqlalchemy'
-    if hasattr(model, '__tablename__'):
-        return 'sqlalchemy'
-    return None
+    backend = infer_backend(model)
+    if backend in ('sqlalchemy', 'flask-sqlalchemy'):
+        return model.__tablename__
+    if backend == 'elixir':
+        return model.table.name
+    raise TypeError('Could not infer database abstraction layer from %s.'
+                    ' One solution is to specify "collection_name" explicitly'
+                    ' when calling "create_api".' % model)
 
 
 class IllegalArgumentError(Exception):
@@ -339,7 +330,7 @@ class APIManager(object):
                    ' authentication_function.')
             raise IllegalArgumentError(msg)
         if collection_name is None:
-            collection_name = model.__tablename__
+            collection_name = _collection_name_from_model(model)
         # convert all method names to upper case
         methods = frozenset((m.upper() for m in methods))
         # sets of methods used for different types of endpoints
