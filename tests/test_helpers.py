@@ -21,20 +21,12 @@ except:
 else:
     has_flask_sqlalchemy = True
 try:
-    from elixir import create_all
-    from elixir import drop_all
-    from elixir import Entity
-    from elixir import Field
-    from elixir import metadata
-    from elixir import setup_all
-    from elixir import Unicode
+    import elixir as elx
 except:
     has_elixir = False
 else:
     has_elixir = True
-from sqlalchemy import Column
-from sqlalchemy import create_engine
-from sqlalchemy import Integer
+import sqlalchemy as sa
 from sqlalchemy.ext.declarative import declarative_base
 
 from flask.ext.restless.helpers import infer_backend
@@ -57,14 +49,14 @@ class BackendInferenceTest(TestCase):
         """Tests that SQLAlchemy is correctly inferred from a SQLAlchemy model.
 
         """
-        engine = create_engine('sqlite://', convert_unicode=True)
+        engine = sa.create_engine('sqlite://', convert_unicode=True)
         Base = declarative_base()
         Base.metadata.bind = engine
 
         class Test(Base):
             __tablename__ = 'person'
-            id = Column(Integer, primary_key=True)
-            name = Column(Unicode, unique=True)
+            id = sa.Column(sa.Integer, primary_key=True)
+            name = sa.Column(sa.Unicode, unique=True)
         self.assertEqual(infer_backend(Test), 'sqlalchemy')
         Base.metadata.create_all()
         self.assertEqual(infer_backend(Test), 'sqlalchemy')
@@ -98,17 +90,17 @@ class BackendInferenceTest(TestCase):
         app = Flask(__name__)
         app.config['DEBUG'] = True
         app.config['TESTING'] = True
-        metadata.bind = 'sqlite://'
+        elx.metadata.bind = 'sqlite://'
 
-        class Test(Entity):
-            name = Field(Unicode, unique=True)
+        class Test(elx.Entity):
+            name = elx.Field(elx.Unicode, unique=True)
         self.assertEqual(infer_backend(Test), 'elixir')
-        setup_all()
+        elx.setup_all()
         self.assertEqual(infer_backend(Test), 'elixir')
-        create_all()
+        elx.create_all()
         self.assertEqual(infer_backend(Test), 'elixir')
         # TODO put this in tearDown
-        drop_all()
+        elx.drop_all()
         self.assertEqual(infer_backend(Test), 'elixir')
 
     test_flask_sqlalchemy = \
