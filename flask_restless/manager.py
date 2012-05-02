@@ -15,7 +15,7 @@
 from flask import Blueprint
 from sqlalchemy.orm import scoped_session
 
-from .helpers import infer_backend
+from .backends import infer_backend
 from .views import API
 from .views import FunctionAPI
 
@@ -23,6 +23,7 @@ from .views import FunctionAPI
 READONLY_METHODS = frozenset(('GET', ))
 
 
+# TODO move this to backends.py
 def _collection_name_from_model(model):
     """Returns a string representing the collection name for the specified
     model to be used in naming API endpoints for the model.
@@ -32,9 +33,9 @@ def _collection_name_from_model(model):
 
     """
     backend = infer_backend(model)
-    if backend in ('sqlalchemy', 'flask-sqlalchemy'):
+    if backend.name in ('sqlalchemy', 'flask-sqlalchemy'):
         return model.__tablename__
-    if backend == 'elixir':
+    if backend.name == 'elixir':
         return model.table.name
     raise TypeError('Could not infer database abstraction layer from %s.'
                     ' One solution is to specify "collection_name" explicitly'

@@ -1,8 +1,8 @@
 """
-    tests.test_helpers
-    ~~~~~~~~~~~~~~~~~~
+    tests.test_backends
+    ~~~~~~~~~~~~~~~~~~~
 
-    Provides unit tests for the :mod:`flask_restless.helpers` module.
+    Provides unit tests for the :mod:`flask_restless.backends` module.
 
     :copyright: 2012 Jeffrey Finkelstein <jeffrey.finkelstein@gmail.com>
     :license: GNU AGPLv3+ or BSD
@@ -29,14 +29,16 @@ else:
 import sqlalchemy as sa
 from sqlalchemy.ext.declarative import declarative_base
 
-from flask.ext.restless.helpers import infer_backend
+from flask.ext.restless.backends import Backend
+from flask.ext.restless.backends import ElixirBackend
+from flask.ext.restless.backends import FlaskSQLAlchemyBackend
+from flask.ext.restless.backends import infer_backend
+from flask.ext.restless.backends import register_backend
+from flask.ext.restless.backends import SQLAlchemyBackend
+from flask.ext.restless.backends import unregister_backend
 
 
 __all__ = ['BackendInferenceTest']
-
-
-dumps = json.dumps
-loads = json.loads
 
 
 class BackendInferenceTest(TestCase):
@@ -44,6 +46,35 @@ class BackendInferenceTest(TestCase):
     given model class.
 
     """
+
+    def setUp(self):
+        """Creates a dummy backend class for testing."""
+        class TrueBackend(Backend):
+            name = 'test'
+            @staticmethod
+            def infer(*args, **kw):
+                return True
+            @staticmethod
+            def query(*args, **kw):
+                return 'foo'
+        self.TrueBackend = TrueBackend
+
+    def tearDown(self):
+        """Unregisters the dummy backend class, in case it has been registered
+        during any of the tests.
+
+        """
+        # returns None if the specified backend does not exist
+        unregister_backend(self.TrueBackend)
+
+    def test_register_backend_order(self):
+        """Tests that a newly registered backend is checked in the correct
+        order.
+
+        """
+        register_backend(self.TrueBackend, priority=1)
+        result = infer_backend(None)
+        self.assertEqual(self.TrueBackend, result)
 
     def test_sqlalchemy(self):
         """Tests that SQLAlchemy is correctly inferred from a SQLAlchemy model.
@@ -57,12 +88,12 @@ class BackendInferenceTest(TestCase):
             __tablename__ = 'person'
             id = sa.Column(sa.Integer, primary_key=True)
             name = sa.Column(sa.Unicode, unique=True)
-        self.assertEqual(infer_backend(Test), 'sqlalchemy')
+        self.assertEqual(infer_backend(Test), SQLAlchemyBackend)
         Base.metadata.create_all()
-        self.assertEqual(infer_backend(Test), 'sqlalchemy')
+        self.assertEqual(infer_backend(Test), SQLAlchemyBackend)
         # TODO put this in tearDown
         Base.metadata.drop_all()
-        self.assertEqual(infer_backend(Test), 'sqlalchemy')
+        self.assertEqual(infer_backend(Test), SQLAlchemyBackend)
 
     def test_flask_sqlalchemy(self):
         """Tests that Flask-SQLAlchemy is correctly inferred from a
@@ -78,12 +109,12 @@ class BackendInferenceTest(TestCase):
         class Test(db.Model):
             id = db.Column(db.Integer, primary_key=True)
             name = db.Column(db.Unicode, unique=True)
-        self.assertEqual(infer_backend(Test), 'flask-sqlalchemy')
+        self.assertEqual(infer_backend(Test), FlaskSQLAlchemyBackend)
         db.create_all()
-        self.assertEqual(infer_backend(Test), 'flask-sqlalchemy')
+        self.assertEqual(infer_backend(Test), FlaskSQLAlchemyBackend)
         # TODO put this in tearDown
         db.drop_all()
-        self.assertEqual(infer_backend(Test), 'flask-sqlalchemy')
+        self.assertEqual(infer_backend(Test), FlaskSQLAlchemyBackend)
 
     def test_elixir(self):
         """Tests that Elixir is correctly inferred from an Elixir model."""
@@ -94,14 +125,14 @@ class BackendInferenceTest(TestCase):
 
         class Test(elx.Entity):
             name = elx.Field(elx.Unicode, unique=True)
-        self.assertEqual(infer_backend(Test), 'elixir')
+        self.assertEqual(infer_backend(Test), ElixirBackend)
         elx.setup_all()
-        self.assertEqual(infer_backend(Test), 'elixir')
+        self.assertEqual(infer_backend(Test), ElixirBackend)
         elx.create_all()
-        self.assertEqual(infer_backend(Test), 'elixir')
+        self.assertEqual(infer_backend(Test), ElixirBackend)
         # TODO put this in tearDown
         elx.drop_all()
-        self.assertEqual(infer_backend(Test), 'elixir')
+        self.assertEqual(infer_backend(Test), ElixirBackend)
 
     test_flask_sqlalchemy = \
         skipUnless(has_flask_sqlalchemy,

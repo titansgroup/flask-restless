@@ -40,6 +40,7 @@ from sqlalchemy.orm.exc import NoResultFound
 from sqlalchemy.orm.properties import RelationshipProperty as RelProperty
 from sqlalchemy.sql import func
 
+from .backends import infer_backend
 from .helpers import unicode_keys_to_strings
 from .search import create_query
 from .search import search
@@ -301,19 +302,13 @@ class ModelView(MethodView):
         super(ModelView, self).__init__(*args, **kw)
         self.session = session
         self.model = model
-
-    def query(self, model=None):
-        """Returns either a SQLAlchemy query or Flask-SQLAlchemy query object
-        (depending on the type of the model) on the specified `model`, or if
-        `model` is ``None``, the model specified in the constructor of this
-        class.
-
-        """
-        the_model = model or self.model
-        if hasattr(the_model, 'query'):
-            return the_model.query
-        else:
-            return self.session.query(the_model)
+        # set the ``self.query()`` method to delegate to the query function on
+        # the appropriate backend, inferred from the specified model
+        backend = infer_backend(self.model)
+        def query(model=None, *args, **kw):
+            return backend.query(model or self.model, self.session, *args,
+                                 **kw)
+        self.query = query
 
 
 class FunctionAPI(ModelView):

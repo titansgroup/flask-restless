@@ -31,31 +31,3 @@ def unicode_keys_to_strings(dictionary):
 
     """
     return dict((str(k), v) for k, v in dictionary.iteritems())
-
-
-def infer_backend(model):
-    """Returns a string identifying the backend (a database abstraction layer
-    like SQLAlchemy, Flask-SQLAlchemy, or Elixir) for which `model` has been
-    defined.
-
-    This function returns one of ``'sqlalchemy'``, ``'flask-sqlalchemy'``, and
-    ``'elixir'``, or ``None`` if the backend could not be inferred. Note that
-    this function is relatively dumb, and simply checks for the presence of
-    attributes on the model which signify that it was defined using one of the
-    above backends.
-
-    This function should correctly infer the backend regardless of whether the
-    concrete tables have been created (or destroyed); that is, this works
-    before your tables are created, after they are created, and after they have
-    been destroyed.
-
-    .. versionadded:: 0.6
-
-    """
-    if hasattr(model, 'table'):
-        return 'elixir'
-    if hasattr(model, 'query') and hasattr(model, 'query_class'):
-        return 'flask-sqlalchemy'
-    if hasattr(model, '__tablename__'):
-        return 'sqlalchemy'
-    return None
