@@ -180,7 +180,9 @@ def register_backend(backend, priority=None):
 
     """
     if priority is None:
-        priority = max(0, min(p for b, p in backends) - 1)
+        # since `backends` is a heap, `backends[0]` is the minimum, i.e. the
+        # highest priority
+        priority = max(0, backends[0] - 1)
     heapq.heappush(backends, (priority, backend))
 
 
