@@ -16,7 +16,6 @@ from datetime import datetime
 from unittest2 import TestSuite
 
 from flask import json
-from sqlalchemy.exc import OperationalError
 
 from flask.ext.restless.backends import SQLAlchemyBackend
 from flask.ext.restless.manager import IllegalArgumentError
@@ -27,8 +26,7 @@ from .helpers import TestSupport
 from .helpers import TestSupportPrefilled
 
 
-__all__ = ['ModelTestCase', 'FunctionEvaluationTest', 'FunctionAPITestCase',
-           'APITestCase']
+__all__ = ['ModelTestCase', 'FunctionAPITestCase', 'APITestCase']
 
 
 dumps = json.dumps
@@ -123,55 +121,6 @@ class ModelTestCase(TestSupport):
         self.assertFalse(created)
         self.assertEqual(second_instance.name, u'Lincoln')
         self.assertEqual(second_instance.age, 24)
-
-
-class FunctionEvaluationTest(TestSupportPrefilled):
-    """Unit tests for the :func:`flask_restless.view._evaluate_functions`
-    function.
-
-    """
-
-    def test_basic_evaluation(self):
-        """Tests for basic function evaluation."""
-        # test for no model
-        result = SQLAlchemyBackend.evaluate_functions(self.session, None, [])
-        self.assertEqual(result, {})
-
-        # test for no functions
-        result = SQLAlchemyBackend.evaluate_functions(self.Person,
-                                                      self.session, [])
-        self.assertEqual(result, {})
-
-        # test for summing ages
-        functions = [{'name': 'sum', 'field': 'age'}]
-        result = SQLAlchemyBackend.evaluate_functions(self.Person,
-                                                      self.session, functions)
-        self.assertIn('sum__age', result)
-        self.assertEqual(result['sum__age'], 102.0)
-
-        # test for multiple functions
-        functions = [{'name': 'sum', 'field': 'age'},
-                     {'name': 'avg', 'field': 'other'}]
-        result = SQLAlchemyBackend.evaluate_functions(self.Person,
-                                                      self.session, functions)
-        self.assertIn('sum__age', result)
-        self.assertEqual(result['sum__age'], 102.0)
-        self.assertIn('avg__other', result)
-        self.assertEqual(result['avg__other'], 16.2)
-
-    def test_poorly_defined_functions(self):
-        """Tests that poorly defined functions raise errors."""
-        # test for unknown field
-        functions = [{'name': 'sum', 'field': 'bogus'}]
-        with self.assertRaises(AttributeError):
-            SQLAlchemyBackend.evaluate_functions(self.Person, self.session,
-                                                 functions)
-
-        # test for unknown function
-        functions = [{'name': 'bogus', 'field': 'age'}]
-        with self.assertRaises(OperationalError):
-            SQLAlchemyBackend.evaluate_functions(self.Person, self.session,
-                                                 functions)
 
 
 class FunctionAPITestCase(TestSupportPrefilled):
@@ -781,6 +730,5 @@ def load_tests(loader, standard_tests, pattern):
     suite = TestSuite()
     suite.addTest(loader.loadTestsFromTestCase(ModelTestCase))
     suite.addTest(loader.loadTestsFromTestCase(FunctionAPITestCase))
-    suite.addTest(loader.loadTestsFromTestCase(FunctionEvaluationTest))
     suite.addTest(loader.loadTestsFromTestCase(APITestCase))
     return suite

@@ -27,13 +27,13 @@ from flask import json
 from flask import jsonify
 from flask import request
 from flask.views import MethodView
-from sqlalchemy.exc import OperationalError
-from sqlalchemy.orm.exc import MultipleResultsFound
-from sqlalchemy.orm.exc import NoResultFound
 
+from .backends import FunctionEvaluationError
 from .backends import infer_backend
 from .helpers import unicode_keys_to_strings
 from .search import create_query
+from .search import MultipleResultsFound
+from .search import NoResultFound
 from .search import search
 
 
@@ -150,12 +150,8 @@ class FunctionAPI(ModelView):
             if not result:
                 return jsonify_status_code(204)
             return jsonify(result)
-        except AttributeError, exception:
-            message = 'No such field "%s"' % exception.field
-            return jsonify_status_code(400, message=message)
-        except OperationalError, exception:
-            message = 'No such function "%s"' % exception.function
-            return jsonify_status_code(400, message=message)
+        except FunctionEvaluationError, exception:
+            return jsonify_status_code(400, message=str(exception))
 
 
 class API(ModelView):

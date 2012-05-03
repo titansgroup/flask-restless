@@ -32,13 +32,18 @@ from sqlalchemy.ext.declarative import declarative_base
 from flask.ext.restless.backends import Backend
 from flask.ext.restless.backends import ElixirBackend
 from flask.ext.restless.backends import FlaskSQLAlchemyBackend
+from flask.ext.restless.backends import FunctionEvaluationError
 from flask.ext.restless.backends import infer_backend
 from flask.ext.restless.backends import register_backend
 from flask.ext.restless.backends import SQLAlchemyBackend
 from flask.ext.restless.backends import unregister_backend
 
+from .helpers import setUpModule
+from .helpers import tearDownModule
+from .helpers import TestSupportPrefilled
 
-__all__ = ['BackendInferenceTest']
+
+__all__ = ['BackendInferenceTest', 'FunctionEvaluationTest']
 
 
 class BackendInferenceTest(TestCase):
@@ -141,8 +146,58 @@ class BackendInferenceTest(TestCase):
     test_elixir = skipUnless(has_elixir, 'Elixir not found.')(test_elixir)
 
 
+class FunctionEvaluationTest(TestSupportPrefilled):
+    """Unit tests for the :func:`flask_restless.view._evaluate_functions`
+    function.
+
+    """
+
+    def test_basic_evaluation(self):
+        """Tests for basic function evaluation."""
+        # test for no model
+        result = SQLAlchemyBackend.evaluate_functions(self.session, None, [])
+        self.assertEqual(result, {})
+
+        # test for no functions
+        result = SQLAlchemyBackend.evaluate_functions(self.Person,
+                                                      self.session, [])
+        self.assertEqual(result, {})
+
+        # test for summing ages
+        functions = [{'name': 'sum', 'field': 'age'}]
+        result = SQLAlchemyBackend.evaluate_functions(self.Person,
+                                                      self.session, functions)
+        self.assertIn('sum__age', result)
+        self.assertEqual(result['sum__age'], 102.0)
+
+        # test for multiple functions
+        functions = [{'name': 'sum', 'field': 'age'},
+                     {'name': 'avg', 'field': 'other'}]
+        result = SQLAlchemyBackend.evaluate_functions(self.Person,
+                                                      self.session, functions)
+        self.assertIn('sum__age', result)
+        self.assertEqual(result['sum__age'], 102.0)
+        self.assertIn('avg__other', result)
+        self.assertEqual(result['avg__other'], 16.2)
+
+    def test_poorly_defined_functions(self):
+        """Tests that poorly defined functions raise errors."""
+        # test for unknown field
+        functions = [{'name': 'sum', 'field': 'bogus'}]
+        with self.assertRaises(FunctionEvaluationError):
+            SQLAlchemyBackend.evaluate_functions(self.Person, self.session,
+                                                 functions)
+
+        # test for unknown function
+        functions = [{'name': 'bogus', 'field': 'age'}]
+        with self.assertRaises(FunctionEvaluationError):
+            SQLAlchemyBackend.evaluate_functions(self.Person, self.session,
+                                                 functions)
+
+
 def load_tests(loader, standard_tests, pattern):
     """Returns the test suite for this module."""
     suite = TestSuite()
     suite.addTest(loader.loadTestsFromTestCase(BackendInferenceTest))
+    suite.addTest(loader.loadTestsFromTestCase(FunctionEvaluationTest))
     return suite

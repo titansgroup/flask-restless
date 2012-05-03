@@ -21,6 +21,10 @@ from sqlalchemy import Date
 from sqlalchemy import DateTime
 
 
+class FunctionEvaluationError(Exception):
+    pass
+
+
 class Backend(object):
     """Base class for backend-specific functionality.
 
@@ -197,13 +201,8 @@ class Backend(object):
         ``None`` or `functions` is empty, this function returns the empty
         dictionary.
 
-        If a field does not exist on a given model, :exc:`AttributeError` is
-        raised. If a function does not exist,
-        :exc:`sqlalchemy.exc.OperationalError` may be raised. The former
-        exception will have a ``field`` attribute which is the name of the
-        field which does not exist. The latter exception will have a
-        ``function`` attribute which is the name of the function with does not
-        exist.
+        Subclasses which implement this function may raise
+        :exc:`FunctionEvaluationError`.
 
         """
         raise NotImplementedError('Subclasses must override'
@@ -291,6 +290,16 @@ class SQLAlchemyBackendBase(Backend):
 
     @staticmethod
     def evaluate_functions(model, session, functions):
+        """Evaluates functions on SQLAlchemy models.
+
+        This function raises :exc:`FunctionEvaluationError` if a field does not
+        exist on a given model or if a function does not exist. In the case of
+        the former, the exception will have a ``field`` attribute which is the
+        name of the field which does not exist. In the case of the latter, the
+        exception will have a ``function`` attribute which is the name of the
+        function with does not exist.
+
+        """
         if not model or not functions:
             return {}
         processed = []
@@ -304,7 +313,9 @@ class SQLAlchemyBackendBase(Backend):
             funcobj = getattr(func, funcname)
             try:
                 field = getattr(model, fieldname)
-            except AttributeError, exception:
+            except AttributeError:
+                message = 'No such field "%s"' % fieldname
+                exception = FunctionEvaluationError(message)
                 exception.field = fieldname
                 raise exception
             # Time to store things to be executed. The processed list stores
@@ -324,8 +335,10 @@ class SQLAlchemyBackendBase(Backend):
             #    '(OperationalError) no such function: bogusfuncname'
             original_error_msg = exception.args[0]
             bad_function = original_error_msg[37:]
-            exception.function = bad_function
-            raise exception
+            message = 'No such function "%s"' % bad_function
+            new_exception = FunctionEvaluationError(message)
+            new_exception.function = bad_function
+            raise new_exception
         return dict(zip(funcnames, evaluated))
 
 
