@@ -21,7 +21,7 @@ else:
     has_flask_sqlalchemy = True
 
 from flask.ext.restless import APIManager
-from flask.ext.restless.views import _get_columns
+from flask.ext.restless.backends import SQLAlchemyBackend
 
 from .helpers import FlaskTestBase
 from .helpers import setUpModule
@@ -155,7 +155,7 @@ class APIManagerTest(TestSupport):
         return in the JSON representation of instances of the model.
 
         """
-        all_columns = _get_columns(self.Person)
+        all_columns = SQLAlchemyBackend.get_columns(self.Person)
         # allow all
         self.manager.create_api(self.Person, include_columns=None,
                                 url_prefix='/all')

@@ -8,7 +8,17 @@
     :license: GNU AGPLv3+ or BSD
 
 """
+import datetime
 import heapq
+
+from sqlalchemy.exc import OperationalError
+from sqlalchemy.orm import ColumnProperty
+from sqlalchemy.orm import object_mapper
+from sqlalchemy.orm import RelationshipProperty
+from sqlalchemy.orm.properties import RelationshipProperty as RelProperty
+from sqlalchemy.sql import func
+from sqlalchemy import Date
+from sqlalchemy import DateTime
 
 
 class Backend(object):
@@ -77,7 +87,127 @@ class Backend(object):
         Pre-condition: `model` is not ``None``.
 
         """
-        raise NotImplementedError('Subclasses must override _query().')
+        raise NotImplementedError('Subclasses must override query().')
+
+    @staticmethod
+    def is_date_field(model, fieldname):
+        """Returns ``True`` if and only if the field of `model` with the
+        specified name corresponds to either a :class:`datetime.date` object or
+        a :class:`datetime.datetime` object.
+
+        """
+        raise NotImplementedError('Subclasses must override is_date_field().')
+
+    @staticmethod
+    def get_or_create(model, session, **kwargs):
+        """Returns the first instance of the specified model filtered by the
+        keyword arguments, or creates a new instance of the model and returns
+        that.
+
+        This function returns a two-tuple in which the first element is the
+        created or retrieved instance and the second is a boolean value which
+        is ``True`` if and only if an instance was created.
+
+        The idea for this function is based on Django's
+        :meth:`django.db.model.Model.get_or_create()` method.
+
+        `session` is the session in which all database transactions are made
+        (this should be something like a
+        :attr:`flask.ext.sqlalchemy.SQLAlchemy.session`).
+
+        `model` is the model to get or create (this should be something like a
+        SQLAlchemy model).
+
+        `kwargs` are the keyword arguments which will be used to match the
+        instance of `model`.
+
+        """
+        raise NotImplementedError('Subclasses must override get_or_create().')
+
+    @staticmethod
+    def get_columns(model):
+        """Returns a dictionary-like object containing all the columns of the
+        specified `model` class.
+
+        """
+        raise NotImplementedError('Subclasses must override get_columns().')
+
+    @staticmethod
+    def get_related_model(model, relationname):
+        """Gets the class of the model to which `model` is related by the
+        attribute whose name is `relationname`.
+
+        """
+        raise NotImplementedError('Subclasses must override'
+                                  ' get_related_model().')
+
+    @staticmethod
+    def get_relations(model):
+        """Returns a list of relation names of `model` (as a list of strings).
+
+        """
+        raise NotImplementedError('Subclasses must override get_relations().')
+
+    @staticmethod
+    def to_dict(instance, deep=None, exclude=None):
+        """Returns a dictionary representing the fields of the specified
+        `instance` of a model.
+
+        `deep` is a dictionary containing a mapping from a relation name (for a
+        relation of `instance`) to either a list or a dictionary. This is a
+        recursive structure which represents the `deep` argument when calling
+        :func:`to_dict` on related instances. When an empty list is
+        encountered, :func:`to_dict` returns a list of the string
+        representations of the related instances.
+
+        `exclude` specifies the columns which will *not* be present in the
+        returned dictionary representation of the object.
+
+        """
+        raise NotImplementedError('Subclasses must override to_dict().')
+
+    @staticmethod
+    def evaluate_functions(model, session, functions):
+        """Executes each of the functions specified in `functions`, a list of
+        dictionaries of the form described below, on the given model and
+        returns a dictionary mapping function name (slightly modified, see
+        below) to result of evaluation of that function.
+
+        `session` is the session in which all database transactions will be
+        performed.
+
+        `model` is the model class on which the specified functions will be
+        evaluated.
+
+        ``functions`` is a list of dictionaries of the form::
+
+            {'name': 'avg', 'field': 'amount'}
+
+        For example, if you want the sum and the average of the field named
+        "amount"::
+
+            >>> # assume instances of Person exist in the database...
+            >>> f1 = dict(name='sum', field='amount')
+            >>> f2 = dict(name='avg', field='amount')
+            >>> evaluate_functions(Person, [f1, f2])
+            {'avg__amount': 456, 'sum__amount': 123}
+
+        The return value is a dictionary mapping ``'<funcname>__<fieldname>'``
+        to the result of evaluating that function on that field. If `model` is
+        ``None`` or `functions` is empty, this function returns the empty
+        dictionary.
+
+        If a field does not exist on a given model, :exc:`AttributeError` is
+        raised. If a function does not exist,
+        :exc:`sqlalchemy.exc.OperationalError` may be raised. The former
+        exception will have a ``field`` attribute which is the name of the
+        field which does not exist. The latter exception will have a
+        ``function`` attribute which is the name of the function with does not
+        exist.
+
+        """
+        raise NotImplementedError('Subclasses must override'
+                                  ' evaluate_functions().')
 
 
 class SQLAlchemyBackendBase(Backend):
@@ -87,7 +217,116 @@ class SQLAlchemyBackendBase(Backend):
     Use this as the base class for backends which are derived from SQLAlchemy.
 
     """
-    pass
+
+    @staticmethod
+    def is_date_field(model, fieldname):
+        prop = getattr(model, fieldname).property
+        if isinstance(prop, RelationshipProperty):
+            return False
+        fieldtype = prop.columns[0].type
+        return isinstance(fieldtype, Date) or isinstance(fieldtype, DateTime)
+
+    @staticmethod
+    def get_or_create(model, session, **kwargs):
+        # TODO document that this uses the .first() function
+        instance = session.query(model).filter_by(**kwargs).first()
+        if instance:
+            return instance, False
+        else:
+            instance = model(**kwargs)
+            session.add(instance)
+            session.commit()
+            return instance, True
+
+    @staticmethod
+    def get_columns(model):
+        return model._sa_class_manager
+
+    @staticmethod
+    def get_related_model(model, relationname):
+        columns = SQLAlchemyBackendBase.get_columns(model)
+        return columns[relationname].property.mapper.class_
+
+    @staticmethod
+    def get_relations(model):
+        cols = SQLAlchemyBackendBase.get_columns(model)
+        return [k for k in cols if isinstance(cols[k].property, RelProperty)]
+
+    # This code was adapted from :meth:`elixir.entity.Entity.to_dict` and
+    # http://stackoverflow.com/q/1958219/108197.
+    #
+    # TODO should we have an `include` argument also?
+    @staticmethod
+    def to_dict(instance, deep=None, exclude=None):
+        deep = deep or {}
+        exclude = exclude or ()
+        # create the dictionary mapping column name to value
+        columns = (p.key for p in object_mapper(instance).iterate_properties
+                   if isinstance(p, ColumnProperty))
+        result = dict((col, getattr(instance, col)) for col in columns)
+        # Convert datetime and date objects to ISO 8601 format.
+        #
+        # TODO We can get rid of this when issue #33 is resolved.
+        for key, value in result.items():
+            if isinstance(value, datetime.date):
+                result[key] = value.isoformat()
+        # recursively call _o_dict on each of the `deep` relations
+        for relation, rdeep in deep.iteritems():
+            # exclude foreign keys of the related object for the recursive call
+            relationproperty = object_mapper(instance).get_property(relation)
+            newexclude = (key.name for key in relationproperty.remote_side)
+            # get the related value so we can see if it is None or a list
+            relatedvalue = getattr(instance, relation)
+            if relatedvalue is None:
+                result[relation] = None
+            elif isinstance(relatedvalue, list):
+                result[relation] = \
+                    [SQLAlchemyBackendBase.to_dict(inst, rdeep, newexclude)
+                     for inst in relatedvalue]
+            else:
+                result[relation] = \
+                    SQLAlchemyBackendBase.to_dict(relatedvalue, rdeep,
+                                                  newexclude)
+        return result
+
+    @staticmethod
+    def evaluate_functions(model, session, functions):
+        if not model or not functions:
+            return {}
+        processed = []
+        funcnames = []
+        for function in functions:
+            funcname, fieldname = function['name'], function['field']
+            # We retrieve the function by name from the SQLAlchemy ``func``
+            # module and the field by name from the model class.
+            #
+            # If the specified field doesn't exist, this raises AttributeError.
+            funcobj = getattr(func, funcname)
+            try:
+                field = getattr(model, fieldname)
+            except AttributeError, exception:
+                exception.field = fieldname
+                raise exception
+            # Time to store things to be executed. The processed list stores
+            # functions that will be executed in the database and funcnames
+            # contains names of the entries that will be returned to the
+            # caller.
+            funcnames.append('%s__%s' % (funcname, fieldname))
+            processed.append(funcobj(field))
+        # Evaluate all the functions at once and get an iterable of results.
+        #
+        # If any of the functions
+        try:
+            evaluated = session.query(*processed).one()
+        except OperationalError, exception:
+            # HACK original error message is of the form:
+            #
+            #    '(OperationalError) no such function: bogusfuncname'
+            original_error_msg = exception.args[0]
+            bad_function = original_error_msg[37:]
+            exception.function = bad_function
+            raise exception
+        return dict(zip(funcnames, evaluated))
 
 
 class SQLAlchemyBackend(SQLAlchemyBackendBase):
