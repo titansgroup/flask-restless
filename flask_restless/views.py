@@ -96,6 +96,10 @@ class ModelView(MethodView):
         # the appropriate backend, inferred from the specified model. If no
         # model argument is provided, self.model is queried.
         def query(model=None, *args, **kw):
+            """Returns `self.backend.query`, with `self.model` as the first
+            argument unless it is not ``None``.
+
+            """
             return self.backend.query(model or self.model, self.session, *args,
                                       **kw)
 
@@ -349,11 +353,12 @@ class API(ModelView):
 
         """
         self.session.rollback()
-        errors = self._extract_error_messages(exception) or \
+        errors = API._extract_error_messages(exception) or \
             'Could not determine specific validation errors'
         return jsonify_status_code(400, validation_errors=errors)
 
-    def _extract_error_messages(self, exception):
+    @staticmethod
+    def _extract_error_messages(exception):
         """Tries to extract a dictionary mapping field name to validation error
         messages from `exception`, which is a validation exception as provided
         in the ``validation_exceptions`` keyword argument in the constructor of
@@ -650,7 +655,7 @@ class API(ModelView):
             try:
                 # create a SQLALchemy Query from the query parameter `q`
                 query = create_query(self.session, self.model, data)
-            except:
+            except (AttributeError, KeyError, TypeError):
                 return jsonify_status_code(400,
                                            message='Unable to construct query')
         else:
