@@ -13,6 +13,10 @@ Version 0.9.0-dev
 
 Not yet released.
 
+- Fixed issue #60: added the ``hide_endpoints`` keyword argument to
+  :meth:`APIManager.create_api_blueprint` to hide disallowed HTTP methods
+  behind a :http:statuscode:`404` response instead of a :http:statuscode:`405`
+  response.
 - Fixed issue #109: use `sphinxcontrib-issuetracker`_ to render links to GitHub
   issues in documentation.
 - Fixed issue #105: added ability to set a list of related model instances on a

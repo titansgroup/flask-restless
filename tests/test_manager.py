@@ -216,6 +216,45 @@ class APIManagerTest(TestSupport):
         for column in 'vendor', 'owner_id', 'buy_date':
             self.assertIn(column, person_dict['computers'][0])
 
+    def test_hide_endpoints(self):
+        """Tests that the `hide_disallowed_endpoints` and
+        `hide_unauthenticated_endpoints` arguments correctly hide endpoints
+        which would normally return a :http:statuscode:`405` or
+        :http:statuscode:`403` with a :http:statuscode:`404`.
+
+        """
+        self.manager.create_api(self.Person, methods=['GET', 'POST'],
+                                hide_disallowed_endpoints=True)
+        class auth_func(object):
+            x = 0
+            def __call__():
+                x += 1
+                return x % 2
+        self.manager.create_api(self.Person, methods=['GET', 'POST'],
+                                hide_unauthenticated_endpoints=True,
+                                authentication_required_for=['POST'],
+                                authentication_function=auth_func,
+                                url_prefix='/auth')
+        # first test disallowed functions
+        response = self.app.get('/api/person')
+        self.assertNotEqual(404, response.status_code)
+        response = self.app.post('/api/person', data=dumps(dict(name='foo')))
+        self.assertNotEqual(404, response.status_code)
+        response = self.app.patch('/api/person/1',
+                                  data=dumps(dict(name='bar')))
+        self.assertEqual(404, response.status_code)
+        response = self.app.put('/api/person/1', data=dumps(dict(name='bar')))
+        self.assertEqual(404, response.status_code)
+        response = self.app.delete('/api/person/1')
+        self.assertEqual(404, response.status_code)
+        # now test unauthenticated functions
+        response = self.app.get('/auth/person')
+        self.assertNotEqual(404, response.status_code)
+        response = self.app.post('/auth/person', data=dumps(dict(name='foo')))
+        self.assertNotEqual(404, response.status_code)
+        response = self.app.post('/auth/person', data=dumps(dict(name='foo')))
+        self.assertEqual(404, response.status_code)
+
     def test_include_columns(self):
         """Tests that the `include_columns` argument specifies which columns to
         return in the JSON representation of instances of the model.
