@@ -29,7 +29,6 @@ from flask import request
 from flask.views import MethodView
 
 from .backends import FunctionEvaluationError
-from .backends import infer_backend
 from .helpers import unicode_keys_to_strings
 from .search import create_query
 from .search import MultipleResultsFound
@@ -73,7 +72,7 @@ class ModelView(MethodView):
 
     """
 
-    def __init__(self, session, model, *args, **kw):
+    def __init__(self, session, model, backend, *args, **kw):
         """Calls the constructor of the superclass and specifies the model for
         which this class provides a ReSTful API.
 
@@ -83,18 +82,19 @@ class ModelView(MethodView):
         `model` is the SQLALchemy declarative model class of the database model
         for which this instance of the class is an API.
 
+        `backend` is the :class:`backends.Backend` subclass (**not** an
+        instance, but the class itself) which specifies how this object can
+        interact with the specified `model`.
+
         """
         super(ModelView, self).__init__(*args, **kw)
         self.session = session
         self.model = model
-        # guess the backend for which the model is defined
-        self.backend = infer_backend(self.model)
-        if self.backend is None:
-            raise RuntimeError('Could not infer backend from %s' % self.model)
+        self.backend = backend
 
         # Set the ``self.query()`` method to delegate to the query function on
-        # the appropriate backend, inferred from the specified model. If no
-        # model argument is provided, self.model is queried.
+        # the appropriate backend. If no model argument is provided, self.model
+        # is queried.
         def query(model=None, *args, **kw):
             """Returns `self.backend.query`, with `self.model` as the first
             argument unless it is not ``None``.
@@ -162,7 +162,8 @@ class API(ModelView):
 
     """
 
-    def __init__(self, session, model, authentication_required_for=None,
+    def __init__(self, session, model, backend,
+                 authentication_required_for=None,
                  authentication_function=None, include_columns=None,
                  validation_exceptions=None, results_per_page=10, *args, **kw):
         """Instantiates this view with the specified attributes.
@@ -173,6 +174,10 @@ class API(ModelView):
         `model` is the :class:`flask_restless.Entity` class of the database
         model for which this instance of the class is an API. This model should
         live in `database`.
+
+        `backend` is the :class:`backends.Backend` subclass (**not** an
+        instance, but the class itself) which specifies how this object can
+        interact with the specified `model`.
 
         `authentication_required_for` is a list of HTTP method names (for
         example, ``['POST', 'PATCH']``) for which authentication must be
@@ -217,7 +222,7 @@ class API(ModelView):
            `authentication_function` keyword arguments.
 
         """
-        super(API, self).__init__(session, model, *args, **kw)
+        super(API, self).__init__(session, model, backend, *args, **kw)
         self.authentication_required_for = authentication_required_for or ()
         self.authentication_function = authentication_function
         # convert HTTP method names to uppercase
