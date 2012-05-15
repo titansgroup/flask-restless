@@ -23,24 +23,6 @@ from .views import FunctionAPI
 READONLY_METHODS = frozenset(('GET', ))
 
 
-# TODO move this to backends.py
-def _collection_name_from_model(backend, model):
-    """Returns a string representing the collection name for the specified
-    model to be used in naming API endpoints for the model.
-
-    If the type of database abstraction layer used to define `model` cannot be
-    inferred, :exc:`TypeError` will be raised.
-
-    """
-    if backend.name in ('sqlalchemy', 'flask-sqlalchemy'):
-        return model.__tablename__
-    if backend.name == 'elixir':
-        return model.table.name
-    raise TypeError('Could not infer database abstraction layer from %s.'
-                    ' One solution is to specify "collection_name" explicitly'
-                    ' when calling "create_api".' % model)
-
-
 class IllegalArgumentError(Exception):
     """This exception is raised when a calling function has provided illegal
     arguments to a function or method.
@@ -328,7 +310,7 @@ class APIManager(object):
             raise IllegalArgumentError(msg)
         backend = infer_backend(model)
         if collection_name is None:
-            collection_name = _collection_name_from_model(backend, model)
+            collection_name = backend.get_table_name(model)
         # convert all method names to upper case
         methods = frozenset((m.upper() for m in methods))
         # sets of methods used for different types of endpoints

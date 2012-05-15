@@ -103,6 +103,14 @@ class Backend(object):
         raise NotImplementedError('Subclasses must override is_date_field().')
 
     @staticmethod
+    def get_table_name(model):
+        """Returns a string representing of the name of the database table
+        which the specified model class represents.
+
+        """
+        raise NotImplementedError('Subclasses must override get_table_name().')
+
+    @staticmethod
     def get_or_create(model, session, **kwargs):
         """Returns the first instance of the specified model filtered by the
         keyword arguments, or creates a new instance of the model and returns
@@ -224,6 +232,10 @@ class SQLAlchemyBackendBase(Backend):
             return False
         fieldtype = prop.columns[0].type
         return isinstance(fieldtype, Date) or isinstance(fieldtype, DateTime)
+
+    @staticmethod
+    def get_table_name(model):
+        return model.__tablename__
 
     @staticmethod
     def get_or_create(model, session, **kwargs):
@@ -374,6 +386,10 @@ class ElixirBackend(SQLAlchemyBackendBase):
     """Represents an Elixir backend."""
 
     name = 'elixir'
+
+    @staticmethod
+    def get_table_name(model):
+        return model.table.name
 
     @staticmethod
     def infer(model, *args, **kw):
