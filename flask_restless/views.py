@@ -32,6 +32,7 @@ from flask.views import MethodView
 from sqlalchemy import Date
 from sqlalchemy import DateTime
 from sqlalchemy.exc import OperationalError
+from sqlalchemy.orm import class_mapper
 from sqlalchemy.orm import ColumnProperty
 from sqlalchemy.orm import object_mapper
 from sqlalchemy.orm import RelationshipProperty
@@ -123,6 +124,23 @@ def _get_relations(model):
     """Returns a list of relation names of `model` (as a list of strings)."""
     cols = _get_columns(model)
     return [k for k in cols if isinstance(cols[k].property, RelProperty)]
+
+
+def _primary_key_name(model_or_instance):
+    """Returns the name of the primary key of the specified model or instance
+    of a model, as a string.
+
+    If `model_or_instance` specifies multiple primary keys and ``'id'`` is one
+    of them, ``'id'`` is returned. If `model_or_instance` specifies multiple
+    primary keys and ``'id'`` is not one of them, only the name of the first
+    one in the list of primary keys is returned.
+
+    """
+    its_a_model = isinstance(model_or_instance, type)
+    mapper = class_mapper if its_a_model else object_mapper
+    mapped = mapper(model_or_instance)
+    primary_key_names = [key.name for key in mapped.primary_key]
+    return 'id' if 'id' in primary_key_names else primary_key_names[0]
 
 
 # This code was adapted from :meth:`elixir.entity.Entity.to_dict` and
@@ -381,7 +399,8 @@ class API(ModelView):
 
     def __init__(self, session, model, authentication_required_for=None,
                  authentication_function=None, include_columns=None,
-                 validation_exceptions=None, *args, **kw):
+                 validation_exceptions=None, results_per_page=10,
+                 post_form_preprocessor=None, *args, **kw):
         """Instantiates this view with the specified attributes.
 
         `session` is the SQLAlchemy session in which all database transactions
@@ -417,17 +436,28 @@ class API(ModelView):
         columns will be included. If this list includes a string which does not
         name a column in `model`, it will be ignored.
 
-        .. versionadded:: 0.5
-           Added the `include_columns` keyword argument.
+        `results_per_page` is a positive integer which represents the number of
+        results which are returned per page. If this is anything except a
+        positive integer, pagination will be disabled (warning: this may result
+        in large responses). For more information, see :ref:`pagination`.
+
+        `post_form_preprocessor` is a callback function which takes
+        POST input parameters loaded from JSON and enhances them with other
+        key/value pairs. The example use of this is when your ``model``
+        requires to store user identity and for security reasons the identity
+        is not read from the post parameters (where malicious user can tamper
+        with them) but from the session.
+
+        .. versionadded:: 0.6
+           Added the `results_per_page` keyword argument.
 
         .. versionadded:: 0.5
-           Added the `validation_exceptions` keyword argument.
+           Added the `include_columns`, and `validation_exceptions` keyword
+           arguments.
 
         .. versionadded:: 0.4
-           Added the `authentication_required_for` keyword argument.
-
-        .. versionadded:: 0.4
-           Added the `authentication_function` keyword argument.
+           Added the `authentication_required_for` and
+           `authentication_function` keyword arguments.
 
         """
         super(API, self).__init__(session, model, *args, **kw)
@@ -438,6 +468,10 @@ class API(ModelView):
             frozenset([m.upper() for m in self.authentication_required_for])
         self.include_columns = include_columns
         self.validation_exceptions = tuple(validation_exceptions or ())
+        self.results_per_page = results_per_page
+        self.paginate = (isinstance(self.results_per_page, int)
+                         and self.results_per_page > 0)
+        self.post_form_preprocessor = post_form_preprocessor
 
     def _add_to_relation(self, query, relationname, toadd=None):
         """Adds a new or existing related model to each model specified by
@@ -464,8 +498,7 @@ class API(ModelView):
         submodel = _get_related_model(self.model, relationname)
         for dictionary in toadd or []:
             if 'id' in dictionary:
-                filtered = self.query(submodel).filter_by(id=dictionary['id'])
-                subinst = filtered.first()
+                subinst = self._get_by(dictionary['id'], submodel)
             else:
                 kw = unicode_keys_to_strings(dictionary)
                 subinst = _get_or_create(self.session, submodel, **kw)[0]
@@ -500,8 +533,7 @@ class API(ModelView):
         for dictionary in toremove or []:
             remove = dictionary.pop('__delete__', False)
             if 'id' in dictionary:
-                filtered = self.query(submodel).filter_by(id=dictionary['id'])
-                subinst = filtered.first()
+                subinst = self._get_by(dictionary['id'], submodel)
             else:
                 kw = unicode_keys_to_strings(dictionary)
                 # TODO document that we use .first() here
@@ -618,7 +650,7 @@ class API(ModelView):
         """
         result = {}
         for fieldname, value in dictionary.iteritems():
-            if _is_date_field(self.model, fieldname):
+            if _is_date_field(self.model, fieldname) and value is not None:
                 result[fieldname] = parse_datetime(value)
             else:
                 result[fieldname] = value
@@ -713,13 +745,45 @@ class API(ModelView):
 
         # for security purposes, don't transmit list as top-level JSON
         if isinstance(result, list):
-            objects = [_to_dict_include(x, include=self.include_columns)
-                       for x in result]
-            return jsonify(objects=objects)
+            return self._paginated(result, deep)
         else:
             result = _to_dict_include(result, deep,
                                       include=self.include_columns)
             return jsonify(result)
+
+    # TODO it is ugly to have `deep` as an arg here; can we remove it?
+    def _paginated(self, instances, deep):
+        """Returns a paginated JSONified response from the specified list of
+        model instances.
+
+        `instances` is a list of model instances.
+
+        `deep` is the dictionary which defines the depth of submodels to output
+        in the JSON format of the model instances in `instances`; it is passed
+        directly to :func:`_to_dict_include`.
+
+        The response data is JSON of the form:
+
+        .. sourcecode:: javascript
+
+           {
+             "page": 2,
+             "objects": [{"id": 1, "name": "Jeffrey", "age": 24}, ...]
+           }
+
+        """
+        if self.paginate:
+            # get the page number (first page is page 1)
+            page_num = int(request.args.get('page', 1))
+            start = (page_num - 1) * self.results_per_page
+            end = min(len(instances), start + self.results_per_page)
+        else:
+            page_num = 1
+            start = 0
+            end = len(instances)
+        objects = [_to_dict_include(x, deep, include=self.include_columns)
+                   for x in instances[start:end]]
+        return jsonify(page=page_num, objects=objects)
 
     def _check_authentication(self):
         """If the specified HTTP method requires authentication (see the
@@ -731,6 +795,27 @@ class API(ModelView):
         if (request.method in self.authentication_required_for
             and not self.authentication_function()):
             abort(401)
+
+    def _query_by_primary_key(self, primary_key_value, model=None):
+        """Returns a SQLAlchemy query object containing the result of querying
+        `model` (or ``self.model`` if not specified) for instances whose
+        primary key has the value `primary_key_value`.
+
+        Presumably, the returned query should have at most one element.
+
+        """
+        the_model = model or self.model
+        # force unicode primary key name to string; see unicode_keys_to_strings
+        pk_name = str(_primary_key_name(the_model))
+        return self.query(the_model).filter_by(**{pk_name: primary_key_value})
+
+    def _get_by(self, primary_key_value, model=None):
+        """Returns the single instance of `model` (or ``self.model`` if not
+        specified) whose primary key has the value `primary_key_value`, or
+        ``None`` if no such instance exists.
+
+        """
+        return self._query_by_primary_key(primary_key_value, model).first()
 
     def get(self, instid):
         """Returns a JSON representation of an instance of model with the
@@ -749,7 +834,7 @@ class API(ModelView):
         self._check_authentication()
         if instid is None:
             return self._search()
-        inst = self.query().filter_by(id=instid).first()
+        inst = self._get_by(instid)
         if inst is None:
             abort(404)
         relations = _get_relations(self.model)
@@ -767,7 +852,7 @@ class API(ModelView):
 
         """
         self._check_authentication()
-        inst = self.query().filter_by(id=instid).first()
+        inst = self._get_by(instid)
         if inst is not None:
             self.session.delete(inst)
             self.session.commit()
@@ -799,6 +884,11 @@ class API(ModelView):
             params = request.json
         except BadRequest:
             return jsonify_status_code(400, message='Unable to decode data')
+
+        # If post_form_preprocessor is specified, call it
+        if self.post_form_preprocessor:
+            params = self.post_form_preprocessor(params)
+
         # Getting the list of relations that will be added later
         cols = _get_columns(self.model)
         relations = _get_relations(self.model)
@@ -821,16 +911,27 @@ class API(ModelView):
             # Handling relations, a single level is allowed
             for col in set(relations).intersection(paramkeys):
                 submodel = cols[col].property.mapper.class_
-                for subparams in params[col]:
-                    kw = unicode_keys_to_strings(subparams)
+                
+                if type(params[col]) == list:
+                    # model has several related objects
+                    for subparams in params[col]:
+                        kw = unicode_keys_to_strings(subparams)
+                        subinst = _get_or_create(self.session, submodel,
+                                                 **kw)[0]
+                        getattr(instance, col).append(subinst)
+                else:
+                    # model has single related object
+                    kw = unicode_keys_to_strings(params[col])
                     subinst = _get_or_create(self.session, submodel, **kw)[0]
-                    getattr(instance, col).append(subinst)
+                    setattr(instance, col, subinst)
 
             # add the created model to the session
             self.session.add(instance)
             self.session.commit()
 
-            return jsonify_status_code(201, id=instance.id)
+            pk_name = str(_primary_key_name(instance))
+            pk_value = getattr(instance, pk_name)
+            return jsonify_status_code(201, **{pk_name: pk_value})
         except self.validation_exceptions, exception:
             return self._handle_validation_exception(exception)
 
@@ -869,7 +970,7 @@ class API(ModelView):
                                            message='Unable to construct query')
         else:
             # create a SQLAlchemy Query which has exactly the specified row
-            query = self.query().filter_by(id=instid)
+            query = self._query_by_primary_key(instid)
             assert query.count() == 1, 'Multiple rows with same ID'
 
         relations = self._update_relations(query, data)
@@ -884,7 +985,10 @@ class API(ModelView):
             # Let's update all instances present in the query
             num_modified = 0
             if params:
-                num_modified = query.update(params, False)
+                for item in query.all():
+                    for param, value in params.iteritems():
+                        setattr(item, param, value)
+                    num_modified += 1
             self.session.commit()
         except self.validation_exceptions, exception:
             return self._handle_validation_exception(exception)

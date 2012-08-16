@@ -84,8 +84,13 @@ Then your API for ``Person`` will be available at ``/api/v2/person``.
 Collection name
 ~~~~~~~~~~~~~~~
 
-By default, the name of the collection in the API will be the lowercase name of
-the model. To provide a different name for the model, provide a string to the
+By default, the name of the collection which appears in the URLs of the API
+will be the name of the table which backs your model. If your model is a
+SQLAlchemy model, this will be the value of ``__tablename__``. If your model is
+a Flask-SQLAlchemy model, this will be the lowercase name of the model with
+``CamelCase`` changed to ``camel_case``.
+
+To provide a different name for the model, provide a string to the
 `collection_name` keyword argument of the :meth:`APIManager.create_api`
 method::
 
@@ -116,6 +121,11 @@ validation, implement it yourself in your database models. However, by
 specifying a list of exceptions raised by your backend on validation errors,
 Flask-Restless will forward messages from raised exceptions to the client in an
 error response.
+
+A reasonable validation framework you might use for this purpose is `SQLAlchemy
+Validation <https://bitbucket.org/rsyring/sqlalchemy-validation>`_. You can
+also use the :func:`~sqlalchemy.orm.validates` decorator that comes with
+SQLAlchemy.
 
 For example, if your validation framework includes an exception called
 ``ValidationError``, then call the :meth:`APIManager.create_api` method with
@@ -215,3 +225,57 @@ For an example using `Flask-Login <packages.python.org/Flask-Login/>`_, see the
 :file:`examples/authentication` directory in the source distribution, or view
 it online at `GitHub
 <https://github.com/jfinkels/flask-restless/tree/master/examples/authentication>`_.
+
+Pagination
+~~~~~~~~~~
+
+To set the number of results returned per page, use the ``results_per_page``
+keyword arguments to the :meth:`APIManager.create_api` method. The default
+number of results per page is ten. If this is set to anything except a positive
+integer, pagination will be disabled and all results will be returned on each
+:http:method:`get` request.
+
+.. attention::
+
+   Disabling pagination can result in large responses!
+
+For example, to set each page to include only two results::
+
+    apimanager.create_api(Person, results_per_page=2)
+
+Then a request to :http:get:`/api/person` will return a JSON object which looks
+like this:
+
+.. sourcecode:: javascript
+
+   {
+     "page": 1,
+     "objects": [
+       {"name": "Jeffrey", "id": 1},
+       {"name": "John", "id": 2}
+     ]
+   }
+
+For more information on using pagination, see :ref:`pagination`.
+
+Updating POST parameters before committing
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+To apply some function to the :http:method:`post` form parameters before the
+database model is created, specify the ``post_form_preprocessor`` keyword. The
+value of ``post_form_preprocessor`` must be a function which accepts a single
+dictionary as input and outputs a dictionary. The input dictionary is the
+dictionary mapping names of columns of the model to values to assign to that
+column, as specified by the JSON provided in the body of the
+:http:method:`post` request. The output dictionary should be the same, but with
+whatever additions, deletions, or modifications you wish.
+
+For example, if the client is making a :http:method:`post` request to a model
+which which has an ``owner`` field which should contain the ID of the currently
+logged in user, you may wish for the server to append the mapping ``('owner',
+current_user.id)`` to the form parameters. In this case, you would set the
+value of ``post_form_processor`` to be the function defined below::
+
+    def add_user_id(dictionary):
+        dictionary['owner'] = current_user.id
+        return dictionary

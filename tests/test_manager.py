@@ -10,10 +10,8 @@
 """
 import datetime
 from unittest2 import skipUnless
-from unittest2 import TestCase
 from unittest2 import TestSuite
 
-from flask import Flask
 from flask import json
 try:
     from flask.ext.sqlalchemy import SQLAlchemy
@@ -42,6 +40,13 @@ class APIManagerTest(TestSupport):
     """Unit tests for the :class:`flask_restless.manager.APIManager` class.
 
     """
+
+    def test_constructor(self):
+        """Tests that no error occurs on instantiation without any arguments to
+        the constructor.
+
+        """
+        APIManager()
 
     def test_init_app(self):
         """Tests for initializing the Flask application after instantiating the

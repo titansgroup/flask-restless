@@ -72,16 +72,6 @@ Also suppose we have registered an API for these models at ``/api/person`` and
 
       {"objects": [{"id": 1, "name": "Jeffrey", "age": 24}, ...]}
 
-   If the value of the ``q`` parameter indicates that a function should be
-   evaluated on the matched instances instead, the response would look like
-   this:
-
-   .. sourcecode:: http
-
-      HTTP/1.1 200 OK
-
-      {"sum__age": 135, "avg__age": 25.5, ...}
-
 .. http:get:: /api/person/(int:id)
 
    Gets a single instance of ``Person`` with the specified ID.
@@ -117,6 +107,120 @@ Also suppose we have registered an API for these models at ``/api/person`` and
       Host: example.com
 
       {"name": "Jeffrey", "age": 24}
+
+   **Sample response**:
+
+   .. sourcecode:: http
+
+      HTTP/1.1 201 Created
+
+      {"id": 1}
+
+   To create a new person which includes a related list of **new** computer
+   instances via a one-to-many relationship, a request must take the following
+   form.
+
+   **Sample request**:
+
+   .. sourcecode:: http
+
+      POST /api/person HTTP/1.1
+      Host: example.com
+
+      {
+        "name": "Jeffrey",
+        "age": 24,
+        "computers":
+          [
+            {"manufacturer": "Dell", "model": "Inspiron"},
+            {"manufacturer": "Apple", "model": "MacBook"},
+          ]
+      }
+
+   **Sample response**:
+
+   .. sourcecode:: http
+
+      HTTP/1.1 201 Created
+
+      {"id": 1}
+
+   .. warning::
+
+      The response does not denote that new instances have been created for the
+      ``Computer`` models.
+
+   To create a new person which includes a single related **new** computer
+   instance (via a one-to-one relationship), a request must take the following
+   form.
+
+   **Sample request**:
+
+   .. sourcecode:: http
+
+      POST /api/person HTTP/1.1
+      Host: example.com
+
+      {
+        "name": "Jeffrey",
+        "age": 24,
+        "computer": {"manufacturer": "Dell", "model": "Inspiron"}
+      }
+
+   **Sample response**:
+
+   .. sourcecode:: http
+
+      HTTP/1.1 201 Created
+
+      {"id": 1}
+
+   .. warning::
+
+      The response does not denote that a new ``Computer`` instance has been
+      created.
+
+   To create a new person which includes a related list of **existing**
+   computer instances via a one-to-many relationship, a request must take the
+   following form.
+
+   **Sample request**:
+
+   .. sourcecode:: http
+
+      POST /api/person HTTP/1.1
+      Host: example.com
+
+      {
+        "name": "Jeffrey",
+        "age": 24,
+        "computers": [ {"id": 1}, {"id": 2} ]
+      }
+
+   **Sample response**:
+
+   .. sourcecode:: http
+
+      HTTP/1.1 201 Created
+
+      {"id": 1}
+
+   To create a new person which includes a single related **existing** computer
+   instance (via a one-to-one relationship), a request must take the following
+   form.
+
+   **Sample request**:
+
+   .. sourcecode:: http
+
+      POST /api/person HTTP/1.1
+      Host: example.com
+
+      {
+        "name": "Jeffrey",
+        "age": 24,
+        "computer": {"id": 1}
+      }
 
    **Sample response**:
 
@@ -377,3 +481,41 @@ the empty JSON object, ``{}``.
    SQLAlchemy's `func
    <http://docs.sqlalchemy.org/en/latest/core/expression_api.html#sqlalchemy.sql.expression.func>`_
    object.
+
+.. _pagination:
+
+Pagination
+----------
+
+Responses to :http:method:`get` requests are paginated by default, with at most
+ten objects per page. To request a specific page, add a ``page=N`` query
+parameter to the request URL, where ``N`` is a positive integer (the first page
+is page one). If no ``page`` query parameter is specified, the first page will
+be returned. If ``page`` is specified but pagination has been disabled, this
+parameter will be ignored.
+
+In addition to the ``"objects"`` list, the response JSON object will have a
+``"page"`` key whose value is the current page. For example, a request to
+:http:get:`/api/person?page=2` will result in the following response:
+
+.. sourcecode:: http
+
+   HTTP/1.1 200 OK
+
+   {
+     "page": 2,
+     "objects": [{"id": 1, "name": "Jeffrey", "age": 24}, ...]
+   }
+
+If pagination is disabled (by setting ``results_per_page=None`` in
+:meth:`APIManager.create_api`, for example), any ``page`` key in the query
+parameters will be ignored, and the response JSON will include a ``"page"`` key
+which always has the value ``1``.
+
+.. note::
+
+   As specified in in :ref:`queryformat`, clients can receive responses with
+   ``limit`` (a maximum number of objects in the response) and ``offset`` (the
+   number of initial objects to skip in the response) applied. It is possible,
+   though not recommended, to use pagination in addition to ``limit`` and
+   ``offset``. For simple clients, pagination should be fine.

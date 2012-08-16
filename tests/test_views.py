@@ -42,12 +42,15 @@ loads = json.loads
 class ModelTestCase(TestSupport):
     """Provides tests for helper functions which operate on models."""
 
-    def test_column_introspection(self):
+    def test_get_columns(self):
         """Test for getting the names of columns as strings."""
         columns = _get_columns(self.Person)
         self.assertEqual(sorted(columns.keys()), sorted(['age', 'birth_date',
                                                          'computers', 'id',
                                                          'name', 'other']))
+
+    def test_get_relations(self):
+        """Tests getting the names of the relations of a model as strings."""
         relations = _get_relations(self.Person)
         self.assertEqual(relations, ['computers'])
 
@@ -287,6 +290,16 @@ class APITestCase(TestSupport):
         inst = _to_dict(person, deep)
         self.assertEqual(loads(response.data), inst)
 
+    def test_post_nullable_date(self):
+        """Tests the creation of a model with a nullable date field."""
+        self.manager.create_api(self.Star, methods=['GET', 'POST'])
+        data = dict(inception_time=None)
+        response = self.app.postj('/api/star', data=dumps(data))
+        self.assertEqual(response.status_code, 201)
+        response = self.app.getj('/api/star/1')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(loads(response.data)['inception_time'], None)
+
     def test_post_with_submodels(self):
         """Tests the creation of a model with a related field."""
         data = {'name': u'John', 'age': 2041,
@@ -295,6 +308,16 @@ class APITestCase(TestSupport):
         self.assertEqual(response.status_code, 201)
         self.assertIn('id', loads(response.data))
 
+        response = self.app.getj('/api/person')
+        self.assertEqual(len(loads(response.data)['objects']), 1)
+        
+    def test_post_with_single_submodel(self):
+        data = {'vendor': u'Apple',  'name': u'iMac',
+                'owner': {'name': u'John', 'age': 2041}}
+        response = self.app.postj('/api/computer', data=dumps(data))
+        self.assertEqual(response.status_code, 201)
+        self.assertIn('id', loads(response.data))
+        # Test if owner was successfully created
         response = self.app.getj('/api/person')
         self.assertEqual(len(loads(response.data)['objects']), 1)
 
@@ -812,6 +835,86 @@ class APITestCase(TestSupport):
         self.assertEqual(response.status_code, 400)
         response = self.app.deletej('/api/person/1')
         self.assertEqual(response.status_code, 204)
+
+    def test_pagination(self):
+        """Tests for pagination of long result sets."""
+        self.manager.create_api(self.Person, url_prefix='/api/v2',
+                                results_per_page=5)
+        self.manager.create_api(self.Person, url_prefix='/api/v3',
+                                results_per_page=0)
+        for i in range(25):
+            d = dict(name=unicode('person%s' % i))
+            response = self.app.postj('/api/person', data=dumps(d))
+            self.assertEqual(response.status_code, 201)
+        response = self.app.getj('/api/person')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(loads(response.data)['page'], 1)
+        self.assertEqual(len(loads(response.data)['objects']), 10)
+        response = self.app.getj('/api/person?page=1')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(loads(response.data)['page'], 1)
+        self.assertEqual(len(loads(response.data)['objects']), 10)
+        response = self.app.getj('/api/person?page=2')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(loads(response.data)['page'], 2)
+        self.assertEqual(len(loads(response.data)['objects']), 10)
+        response = self.app.getj('/api/person?page=3')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(loads(response.data)['page'], 3)
+        self.assertEqual(len(loads(response.data)['objects']), 5)
+
+        response = self.app.getj('/api/v2/person?page=3')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(loads(response.data)['page'], 3)
+        self.assertEqual(len(loads(response.data)['objects']), 5)
+
+        response = self.app.getj('/api/v3/person')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(loads(response.data)['page'], 1)
+        self.assertEqual(len(loads(response.data)['objects']), 25)
+
+        response = self.app.getj('/api/v3/person?page=2')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(loads(response.data)['page'], 1)
+        self.assertEqual(len(loads(response.data)['objects']), 25)
+
+    def test_alternate_primary_key(self):
+        """Tests that models with primary keys which are not ``id`` columns are
+        accessible via their primary keys.
+
+        """
+        self.manager.create_api(self.Planet, methods=['GET', 'POST'])
+        data = dict(name='Earth')
+        response = self.app.postj('/api/planet', data=dumps(data))
+        self.assertEqual(response.status_code, 201)
+        response = self.app.getj('/api/planet/1')
+        self.assertEqual(response.status_code, 404)
+        response = self.app.getj('/api/planet')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(loads(response.data)['objects']), 1)
+        response = self.app.getj('/api/planet/Earth')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(loads(response.data), dict(name='Earth'))
+
+    def test_post_form_preprocessor(self):
+        """Tests POST method decoration using a custom function."""
+        def decorator_function(params):
+            if params:
+                # just add a new attribute
+                params['other'] = 7
+            return params
+
+        # test for function that decorates parameters with 'other' attribute
+        self.manager.create_api(self.Person, methods=['POST'],
+                                url_prefix='/api/v2',
+                                post_form_preprocessor=decorator_function)
+
+        response = self.app.postj('/api/v2/person',
+                                  data=dumps({'name': u'Lincoln', 'age': 23}))
+        self.assertEqual(response.status_code, 201)
+
+        person = self.session.query(self.Person).filter_by(id=loads(response.data)['id']).first()
+        self.assertEquals(person.other, 7)
 
 
 def load_tests(loader, standard_tests, pattern):

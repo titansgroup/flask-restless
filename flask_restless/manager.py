@@ -184,7 +184,7 @@ class APIManager(object):
 
         """
         self.app = app
-        self.session = session or flask_sqlalchemy_db.session
+        self.session = session or getattr(flask_sqlalchemy_db, 'session', None)
         if isinstance(self.session, type):
             self.session = scoped_session(self.session)
 
@@ -193,7 +193,9 @@ class APIManager(object):
                              allow_patch_many=False, allow_functions=False,
                              authentication_required_for=None,
                              authentication_function=None,
-                             include_columns=None, validation_exceptions=None):
+                             include_columns=None, validation_exceptions=None,
+                             results_per_page=10,
+                             post_form_preprocessor=None):
         """Creates an returns a ReSTful API interface as a blueprint, but does
         not register it on any :class:`flask.Flask` application.
 
@@ -277,33 +279,36 @@ class APIManager(object):
         columns will be included. If this list includes a string which does not
         name a column in `model`, it will be ignored.
 
+        `results_per_page` is a positive integer which represents the number of
+        results which are returned per page. If this is anything except a
+        positive integer, pagination will be disabled (warning: this may result
+        in large responses). For more information, see :ref:`pagination`.
+
+        `post_form_preprocessor` is a callback function which takes
+        POST input parameters loaded from JSON and enhances them with other
+        key/value pairs. The example use of this is when your ``model``
+        requires to store user identity and for security reasons the identity
+        is not read from the post parameters (where malicious user can tamper
+        with them) but from the session.
+
         .. versionadded:: 0.6
            This functionality was formerly in :meth:`create_api`, but the
            blueprint creation and registration have now been separated.
 
-        .. versionadded:: 0.5
-           Added the `include_columns` keyword argument.
+        .. versionadded:: 0.6
+           Added the `results_per_page` keyword argument.
 
         .. versionadded:: 0.5
-           Added the `validation_exceptions` keyword argument.
+           Added the `include_columns` and `validation_exceptions` keyword
+           argument.
 
         .. versionadded:: 0.4
-           Added the `authentication_required_for` keyword argument.
+           Added the `allow_functions`, `allow_patch_many`,
+           `authentication_required_for`, `authentication_function`, and
+           `collection_name` keyword arguments.
 
         .. versionadded:: 0.4
-           Added the `authentication_function` keyword argument.
-
-        .. versionadded:: 0.4
-           Added the `allow_functions` keyword argument.
-
-        .. versionchanged:: 0.4
            Force the model name in the URL to lowercase.
-
-        .. versionadded:: 0.4
-           Added the `allow_patch_many` keyword argument.
-
-        .. versionadded:: 0.4
-           Added the `collection_name` keyword argument.
 
         """
         if authentication_required_for and not authentication_function:
@@ -325,14 +330,14 @@ class APIManager(object):
             methods & frozenset(('GET', 'PATCH', 'DELETE', 'PUT'))
         # the base URL of the endpoints on which requests will be made
         collection_endpoint = '/%s' % collection_name
-        instance_endpoint = collection_endpoint + '/<int:instid>'
         # the name of the API, for use in creating the view and the blueprint
         apiname = APIManager.APINAME_FORMAT % collection_name
         # the view function for the API for this model
         api_view = API.as_view(apiname, self.session, model,
                                authentication_required_for,
                                authentication_function, include_columns,
-                               validation_exceptions)
+                               validation_exceptions, results_per_page,
+                               post_form_preprocessor)
         # suffix an integer to apiname according to already existing blueprints
         blueprintname = self._next_blueprint_name(apiname)
         # add the URL rules to the blueprint: the first is for methods on the
@@ -347,8 +352,13 @@ class APIManager(object):
         blueprint.add_url_rule(collection_endpoint, defaults={'instid': None},
                                methods=possibly_empty_instance_methods,
                                view_func=api_view)
-        blueprint.add_url_rule(instance_endpoint, methods=instance_methods,
-                               view_func=api_view)
+        # the per-instance endpoints will allow both integer and string primary
+        # key accesses
+        for converter in ('int', 'string'):
+            instance_endpoint = '%s/<%s:instid>' % (collection_endpoint,
+                                                    converter)
+            blueprint.add_url_rule(instance_endpoint, methods=instance_methods,
+                                   view_func=api_view)
         # if function evaluation is allowed, add an endpoint at /api/eval/...
         # which responds only to GET requests and responds with the result of
         # evaluating functions on all instances of the specified model
