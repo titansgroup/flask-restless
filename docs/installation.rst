@@ -12,7 +12,7 @@ with ``pip`` (hopefully in a virtual environment provided by ``virtualenv``)::
 Flask-Restless has the following dependencies (which will be automatically
 installed if you use ``pip``):
 
-* `Flask <http://flask.pocoo.org>`_ version 0.7 or greater
+* `Flask <http://flask.pocoo.org>`_ version 0.9 or greater
 * `SQLAlchemy <http://sqlalchemy.org>`_
 * `python-dateutil <http://labix.org/python-dateutil>`_ version less than 2.0
 * `simplejson <http://pypi.python.org/pypi/simplejson>`_, *only if* you are

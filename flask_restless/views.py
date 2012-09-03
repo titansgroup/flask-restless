@@ -53,18 +53,6 @@ from .search import create_query
 from .search import search
 
 
-def jsonify_status_code(status_code, *args, **kw):
-    """Returns a jsonified response with the specified HTTP status code.
-
-    The positional and keyword arguments are passed directly to the
-    :func:`flask.jsonify` function which creates the response.
-
-    """
-    response = jsonify(*args, **kw)
-    response.status_code = status_code
-    return response
-
-
 def _is_date_field(model, fieldname):
     """Returns ``True`` if and only if the field of `model` with the specified
     name corresponds to either a :class:`datetime.date` object or a
@@ -437,19 +425,19 @@ class FunctionAPI(ModelView):
         try:
             data = json.loads(request.args.get('q')) or {}
         except (TypeError, ValueError, OverflowError):
-            return jsonify_status_code(400, message='Unable to decode data')
+            return jsonify(message='Unable to decode data'), 400
         try:
             result = _evaluate_functions(self.session, self.model,
                                          data.get('functions'))
             if not result:
-                return jsonify_status_code(204)
+                return jsonify(), 204
             return jsonify(result)
         except AttributeError, exception:
             message = 'No such field "%s"' % exception.field
-            return jsonify_status_code(400, message=message)
+            return jsonify(message=message), 400
         except OperationalError, exception:
             message = 'No such function "%s"' % exception.function
-            return jsonify_status_code(400, message=message)
+            return jsonify(message=message), 400
 
 
 class API(ModelView):
@@ -725,7 +713,7 @@ class API(ModelView):
         self.session.rollback()
         errors = self._extract_error_messages(exception) or \
             'Could not determine specific validation errors'
-        return jsonify_status_code(400, validation_errors=errors)
+        return jsonify(validation_errors=errors), 400
 
     def _extract_error_messages(self, exception):
         """Tries to extract a dictionary mapping field name to validation error
@@ -852,7 +840,7 @@ class API(ModelView):
         try:
             data = json.loads(request.args.get('q', '{}'))
         except (TypeError, ValueError, OverflowError):
-            return jsonify_status_code(400, message='Unable to decode data')
+            return jsonify(message='Unable to decode data'), 400
 
         # perform a filtered search
         try:
@@ -862,8 +850,7 @@ class API(ModelView):
         except MultipleResultsFound:
             return jsonify(message='Multiple results found')
         except:
-            return jsonify_status_code(400,
-                                       message='Unable to construct query')
+            return jsonify(message='Unable to construct query'), 400
 
         # create a placeholder for the relations of the returned models
         relations = frozenset(_get_relations(self.model))
@@ -1011,7 +998,7 @@ class API(ModelView):
         if inst is not None:
             self.session.delete(inst)
             self.session.commit()
-        return jsonify_status_code(204)
+        return jsonify(), 204
 
     def post(self):
         """Creates a new instance of a given model based on request data.
@@ -1038,13 +1025,13 @@ class API(ModelView):
         try:
             params = json.loads(request.data)
         except (TypeError, ValueError, OverflowError):
-            return jsonify_status_code(400, message='Unable to decode data')
+            return jsonify(message='Unable to decode data'), 400
         # Check for any request parameter naming a column which does not exist
         # on the current model.
         for field in params:
             if not hasattr(self.model, field):
                 msg = "Model does not have field '%s'" % field
-                return jsonify_status_code(400, message=msg)
+                return jsonify(message=msg), 400
         # If post_form_preprocessor is specified, call it
         if self.post_form_preprocessor:
             params = self.post_form_preprocessor(params)
@@ -1091,7 +1078,7 @@ class API(ModelView):
 
             pk_name = str(_primary_key_name(instance))
             pk_value = getattr(instance, pk_name)
-            return jsonify_status_code(201, **{pk_name: pk_value})
+            return jsonify(**{pk_name: pk_value}), 201
         except self.validation_exceptions, exception:
             return self._handle_validation_exception(exception)
 
@@ -1117,13 +1104,13 @@ class API(ModelView):
             data = json.loads(request.data)
         except (TypeError, ValueError, OverflowError):
             # this also happens when request.data is empty
-            return jsonify_status_code(400, message='Unable to decode data')
+            return jsonify(message='Unable to decode data'), 400
         # Check for any request parameter naming a column which does not exist
         # on the current model.
         for field in data:
             if not hasattr(self.model, field):
                 msg = "Model does not have field '%s'" % field
-                return jsonify_status_code(400, message=msg)
+                return jsonify(message=msg), 400
         # Check if the request is to patch many instances of the current model.
         patchmany = instid is None
         if patchmany:
@@ -1131,8 +1118,7 @@ class API(ModelView):
                 # create a SQLALchemy Query from the query parameter `q`
                 query = create_query(self.session, self.model, data)
             except:
-                return jsonify_status_code(400,
-                                           message='Unable to construct query')
+                return jsonify(message='Unable to construct query'), 400
         else:
             # create a SQLAlchemy Query which has exactly the specified row
             query = self._query_by_primary_key(instid)
