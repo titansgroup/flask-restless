@@ -309,9 +309,6 @@ class APIManager(object):
         is not read from the post parameters (where malicious user can tamper
         with them) but from the session.
 
-        .. versionadded:: 0.7
-           Added the `exclude_columns` keyword argument.
-
         If `hide_disallowed_endpoints` is ``True``, requests to disallowed
         methods (that is, methods not specified in `methods`), which would
         normally yield a :http:statuscode:`405` response, will yield a
@@ -327,6 +324,9 @@ class APIManager(object):
         .. versionadded:: 0.9.0
            Added the `hide_disallowed_endpoints` and
            `hide_unauthenticated_endpoints` keyword argument.
+
+        .. versionadded:: 0.7
+           Added the `exclude_columns` keyword argument.
 
         .. versionadded:: 0.6
            This functionality was formerly in :meth:`create_api`, but the
