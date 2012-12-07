@@ -83,6 +83,8 @@ class TestSupport(FlaskTestBase):
             owner_id = Column(Integer, ForeignKey('person.id'))
             owner = relationship('Person')
 
+
+
         class Person(self.Base):
             __tablename__ = 'person'
             id = Column(Integer, primary_key=True)
@@ -91,6 +93,11 @@ class TestSupport(FlaskTestBase):
             other = Column(Float)
             birth_date = Column(Date)
             computers = relationship('Computer')
+
+            def save(self):
+                self.session.add(instance)
+                self.session.commit()
+
 
         class LazyComputer(self.Base):
             __tablename__ = 'lazycomputer'

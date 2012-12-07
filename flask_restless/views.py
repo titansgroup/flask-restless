@@ -463,8 +463,9 @@ class API(ModelView):
     def __init__(self, session, model, authentication_required_for=None,
                  authentication_function=None, exclude_columns=None,
                  include_columns=None, validation_exceptions=None,
-                 results_per_page=10, post_form_preprocessor=None, *args,
-                 **kw):
+                 results_per_page=10, post_form_preprocessor=None,
+                 custom_save_method=None, *args, **kw):
+
         """Instantiates this view with the specified attributes.
 
         `session` is the SQLAlchemy session in which all database transactions
@@ -556,6 +557,8 @@ class API(ModelView):
         self.paginate = (isinstance(self.results_per_page, int)
                          and self.results_per_page > 0)
         self.post_form_preprocessor = post_form_preprocessor
+
+        self.custom_save_method = custom_save_method
 
     def _add_to_relation(self, query, relationname, toadd=None):
         """Adds a new or existing related model to each model specified by
@@ -1086,8 +1089,12 @@ class API(ModelView):
                     setattr(instance, col, subinst)
 
             # add the created model to the session
-            self.session.add(instance)
-            self.session.commit()
+
+            if self.custom_save_method:
+                getattr(instance, self.custom_save_method)()
+            else:
+                self.session.add(instance)
+                self.session.commit()
 
             pk_name = str(_primary_key_name(instance))
             pk_value = getattr(instance, pk_name)

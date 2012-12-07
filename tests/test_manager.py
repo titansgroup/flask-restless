@@ -11,6 +11,7 @@
 import datetime
 from unittest2 import skipUnless
 from unittest2 import TestSuite
+import mock
 
 from flask import json
 try:
@@ -114,6 +115,44 @@ class APIManagerTest(TestSupport):
         self.assertEqual(loads(response.data)['objects'][0]['id'], 1)
         self.assertEqual(loads(response.data)['objects'][0]['name'], 'bar')
 
+    def test_create_api_with_custom_save(self):
+        """Tests that the :meth:`flask_restless.manager.APIManager.create_api`
+        method creates endpoints which are accessible by the client, only allow
+        specified HTTP methods, and which provide a correct API to a database.
+
+        """
+        # create three different APIs for the same model
+        self.manager.create_api(self.Person, methods=['GET', 'POST'], custom_save_method='save')
+        self.manager.create_api(self.Person, methods=['PATCH'],
+                                url_prefix='/api2', custom_save_method='save')
+        self.manager.create_api(self.Person, methods=['GET'],
+                                url_prefix='/readonly', custom_save_method='save')
+
+        # test that specified endpoints exist
+        response = self.app.post('/api/person', data=dumps(dict(name='foo')))
+        self.assertEqual(response.status_code, 201)
+
+        self.assertEqual(loads(response.data)['id'], 1)
+        response = self.app.get('/api/person')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(loads(response.data)['objects']), 1)
+        self.assertEqual(loads(response.data)['objects'][0]['id'], 1)
+
+    def test_api_with_custom_save_calls_model_save_method(self):
+        """Tests that the :meth:`flask_restless.manager.APIManager.create_api`
+        method creates endpoints which are accessible by the client, only allow
+        specified HTTP methods, and which provide a correct API to a database.
+
+        """
+        # create three different APIs for the same model
+        self.Person.save = mock.MagicMock()
+
+        self.manager.create_api(self.Person, methods=['GET', 'POST'], custom_save_method='save')
+
+        response = self.app.post('/api/person', data=dumps(dict(name='foo')))
+
+        self.Person.save.assert_called_with()
+
     def test_different_collection_name(self):
         """Tests that providing a different collection name exposes the API at
         the corresponding URL.
@@ -157,7 +196,7 @@ class APIManagerTest(TestSupport):
 
     def test_include_related(self):
         """Test for specifying included columns on related models."""
-        date = datetime.date(1999,12,31)
+        date = datetime.date(1999, 12, 31)
         person = self.Person(name='Test', age=10, other=20, birth_date=date)
         computer = self.Computer(name='foo', vendor='bar', buy_date=date)
         self.session.add(person)
@@ -187,7 +226,7 @@ class APIManagerTest(TestSupport):
 
     def test_exclude_related(self):
         """Test for specifying excluded columns on related models."""
-        date = datetime.date(1999,12,31)
+        date = datetime.date(1999, 12, 31)
         person = self.Person(name='Test', age=10, other=20, birth_date=date)
         computer = self.Computer(name='foo', vendor='bar', buy_date=date)
         self.session.add(person)
